@@ -37,6 +37,25 @@ struct Node* getNode(char c, struct Node* next, struct Node* prev)
     return newNode;
 }
 
+void stringBuilderPop(struct StringBuilder* sb)
+{
+    if (sb == NULL) return;
+    if (sb->size == 0) return;
+    sb->size--;
+    if (sb->head == sb->tail)
+    {
+        free(sb->head);
+        sb->head = NULL;
+        sb->tail = NULL;
+        return;
+    }
+    struct Node* oldTail = sb->tail;
+    sb->tail = sb->tail->prev;
+    sb->tail->next = NULL;
+    free(oldTail);
+    return;
+}
+
 // returns 0 on successful append, 1 on error
 int stringBuilderAppend(struct StringBuilder* sb, char c)
 {
@@ -111,10 +130,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Failed to open font: %s\n", SDL_GetError());
         return 1;
     }
-    SDL_Surface *textSurface = TTF_RenderText_Blended(font, "Hello from SDL_TTF!", (SDL_Color){255, 255, 255, 255});
-    SDL_Texture *textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-    SDL_Rect textRect = {100, 100, textSurface->w, textSurface->h};
-    SDL_FreeSurface(textSurface);
+    SDL_Color textColor = {255, 255, 255, 255};
+    SDL_Surface *textSurface = NULL;
+    SDL_Texture *textTexture = NULL;
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 
@@ -123,6 +141,7 @@ int main(int argc, char *argv[])
     unsigned int timerStart = SDL_GetTicks();
     int isRunning = 1;
     struct StringBuilder* sb = stringBuilderInit();
+    unsigned int prevSize = 0;
     while (isRunning)
     {
         frameStart = SDL_GetTicks();
@@ -135,25 +154,50 @@ int main(int argc, char *argv[])
                 isRunning = 0;
                 break;
             case SDL_KEYDOWN:
-                stringBuilderAppend(sb, event.key.keysym.sym);
+                switch (event.key.keysym.sym)
+                {
+                case SDLK_BACKSPACE:
+                    stringBuilderPop(sb);
+                    break;
+                case SDLK_RETURN:
+                case SDLK_KP_ENTER:
+                    stringBuilderAppend(sb, '\n');
+                    break;
+                default:
+                    stringBuilderAppend(sb, event.key.keysym.sym);
+                    break;
+                }
                 break;
             default:
                 break;
             }
         }
-        SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
-        SDL_RenderPresent(renderer);
+        // only force rerender if the text buffer gets updated
+        if (sb->size != prevSize)
+        {
+            if (textTexture != NULL)
+            {
+                SDL_DestroyTexture(textTexture);
+                textTexture = NULL;
+            }
+            prevSize = sb->size;
+            SDL_RenderClear(renderer);
+            // can't render 0 width textures
+            if (sb->size != 0)
+            {
+                stringBuilderToString(sb, inOutBuffer, IN_OUT_BUFFER_SIZE);
+                textSurface = TTF_RenderText_Blended_Wrapped(font, inOutBuffer, textColor, 0);
+                textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+                SDL_Rect textRect = {100, 100, textSurface->w, textSurface->h};
+                SDL_FreeSurface(textSurface);
+            
+                SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+            }
+            SDL_RenderPresent(renderer);
+        }
         frameEnd = SDL_GetTicks();
         float frameTime = (frameEnd - frameStart) / 1000.0;
         SDL_Delay(SDL_floor(16.66f - frameTime));
-        if (frameEnd - timerStart >= 250)
-        {
-            
-            timerStart = frameEnd;
-            stringBuilderToString(sb, inOutBuffer, IN_OUT_BUFFER_SIZE);
-            SDL_SetWindowTitle(window, inOutBuffer);
-        }
     }
     SDL_DestroyTexture(textTexture);
     TTF_CloseFont(font);
