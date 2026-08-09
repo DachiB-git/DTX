@@ -1,18 +1,98 @@
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
+#include <SDL_ttf.h>
 #include <stdio.h>
+
+#define IN_OUT_BUFFER_SIZE 512
+
+struct Node
+{
+    char c;
+    struct Node* prev;
+    struct Node* next;
+};
+
+struct StringBuilder
+{
+    unsigned int size;
+    struct Node* head;
+    struct Node* tail;
+};
+
+struct StringBuilder* stringBuilderInit()
+{
+    struct StringBuilder* sb = malloc(sizeof(*sb));
+    if (sb == NULL) return sb;
+    memset(sb, 0, sizeof(*sb));
+    return sb;
+}
+
+struct Node* getNode(char c, struct Node* next, struct Node* prev)
+{
+    struct Node* newNode = malloc(sizeof(*newNode));
+    if (newNode == NULL) return newNode;
+    newNode->c = c;
+    newNode->next = next;
+    newNode->prev = prev;
+    return newNode;
+}
+
+// returns 0 on successful append, 1 on error
+int stringBuilderAppend(struct StringBuilder* sb, char c)
+{
+    struct Node* n;
+    sb->size++;
+    if (sb->tail == NULL)
+    {
+        n = getNode(c, NULL, NULL);
+        if (n == NULL) return 1;
+        sb->head = n;
+        sb->tail = n;
+    }
+    else
+    {
+        n = getNode(c, NULL, sb->tail);
+        if (n == NULL) return 1;
+        sb->tail->next = n;
+        sb->tail = n;
+    }
+    return 0;
+}
+
+void stringBuilderToString(struct StringBuilder* sb, char *buffer, unsigned int size)
+{
+    if (sb == NULL) return;
+    struct Node* n = sb->head;
+    unsigned int count = 0;
+    while (n)
+    {
+        if (count >= size - 1) break;
+        buffer[count++] = n->c;
+        n = n->next;
+    }
+    buffer[count] = '\0';
+    return;
+}
 
 int main(int argc, char *argv[])
 {
     SDL_Window *window;
     SDL_Renderer *renderer;
-    char buffer[64];
+    TTF_Font *font;
+    char titleBuffer[64];
+    char inOutBuffer[IN_OUT_BUFFER_SIZE];
+
     if (SDL_Init(SDL_INIT_EVERYTHING))
     {
         fprintf(stderr, "Failed to init SDL: %s\n", SDL_GetError());
         return 1;
     }
     
+    if (TTF_Init())
+    {
+        fprintf(stderr, "Failed to init SDL_TTF: %s\n", SDL_GetError());
+        return 1;
+    }
     window = SDL_CreateWindow("DTX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, 0);
     if (window == NULL)
     {
@@ -25,11 +105,24 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Failed to create a renderer: %s\n", SDL_GetError());
         return 1;
     }
+    font = TTF_OpenFont("./AovelSansRounded-rdDL.ttf", 24);
+    if (font == NULL)
+    {
+        fprintf(stderr, "Failed to open font: %s\n", SDL_GetError());
+        return 1;
+    }
+    SDL_Surface *textSurface = TTF_RenderText_Blended(font, "Hello from SDL_TTF!", (SDL_Color){255, 255, 255, 255});
+    SDL_Texture *textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+    SDL_Rect textRect = {100, 100, textSurface->w, textSurface->h};
+    SDL_FreeSurface(textSurface);
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 
     unsigned int frameStart;
     unsigned int frameEnd;
     unsigned int timerStart = SDL_GetTicks();
     int isRunning = 1;
+    struct StringBuilder* sb = stringBuilderInit();
     while (isRunning)
     {
         frameStart = SDL_GetTicks();
@@ -41,11 +134,16 @@ int main(int argc, char *argv[])
             case SDL_QUIT:
                 isRunning = 0;
                 break;
-            
+            case SDL_KEYDOWN:
+                stringBuilderAppend(sb, event.key.keysym.sym);
+                break;
             default:
                 break;
             }
         }
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, textTexture, NULL, &textRect);
+        SDL_RenderPresent(renderer);
         frameEnd = SDL_GetTicks();
         float frameTime = (frameEnd - frameStart) / 1000.0;
         SDL_Delay(SDL_floor(16.66f - frameTime));
@@ -53,10 +151,13 @@ int main(int argc, char *argv[])
         {
             
             timerStart = frameEnd;
-            snprintf(buffer, sizeof(buffer), "DTX | FPS: %f\n", 1.0 / frameTime);
-            SDL_SetWindowTitle(window, buffer);
+            stringBuilderToString(sb, inOutBuffer, IN_OUT_BUFFER_SIZE);
+            SDL_SetWindowTitle(window, inOutBuffer);
         }
     }
+    SDL_DestroyTexture(textTexture);
+    TTF_CloseFont(font);
+    TTF_Quit();
     SDL_DestroyWindow(window);
     SDL_DestroyRenderer(renderer);
     SDL_Quit();
