@@ -274,6 +274,10 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
         SDL_RenderCopyF(te->renderer, textTexture, NULL, &textRect);
         SDL_DestroyTexture(textTexture);
     }
+    else
+    {
+        line->width = 0;
+    }
     SDL_RenderPresent(te->renderer);
 }
 
@@ -338,9 +342,7 @@ void textEngineRenderCursor(struct TextEngine *te)
     SDL_FRect cursorRect = {0};
     if (te->lines > 0)
     {
-        // disgusting hack but will have to do for now
-        if (te->currentLine->sb->size == 0) cursorRect.x = 0;
-        else cursorRect.x = te->currentLine->width;
+        cursorRect.x = te->currentLine->width;
         cursorRect.y = te->currentLine->offsetY;
     }
     cursorRect.w = te->cursor.width;
