@@ -240,6 +240,9 @@ void textEngineHandleEvents(struct TextEngine *te)
             {
                 switch (event.key.keysym.sym)
                 {
+                    case SDLK_ESCAPE:
+                        SDL_PushEvent(&(SDL_Event){.type = SDL_QUIT});
+                        break;
                     case SDLK_BACKSPACE:
                         textEnginePopCharUTF8(te);
                         break;
@@ -369,6 +372,69 @@ void textEngineAppendChar(struct TextEngine *te, char c)
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
     return;
+}
+
+void textEngineReadFile(struct TextEngine *te, char *fileName)
+{
+    FILE *fh = fopen(fileName, "r");
+    if (fh == NULL)
+    {
+        // file not found, try creating it
+        fh = fopen(fileName, "w");
+    }
+    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, "DTX | %s", fileName);
+    SDL_SetWindowTitle(te->window, te->buffer);
+    int bytes_read = fread(te->buffer, sizeof(char), IN_OUT_BUFFER_SIZE - 1, fh);
+    fclose(fh);
+    te->buffer[bytes_read] = '\0';
+    int i = 0;
+    int acc = 0;
+    int wordSize = 0;
+    char *b = te->buffer;
+    while (acc < bytes_read)
+    {
+        // we search for the closes newline
+        // we change the newline to null terminator
+        // we append the string to the engine
+        // we insert a newline
+        // we shift the buffer
+        if (b[i] == '\n' || b[i] == '\0')
+        {
+            b[i++] = '\0';
+            textEngineAppendString(te, b);
+            textEngineAppendLine(te);
+            b += i;
+            acc += i;
+            i = 0;
+            continue;
+        }
+        i++;
+    }
+    return;
+}
+
+void textEngineWriteFile(struct TextEngine *te, char *fileName)
+{
+    FILE* outputFile = fopen("text.tmp", "w");
+    struct Line *line = te->first;
+    while (line)
+    {
+        stringBuilderToString(line->sb, te->buffer, IN_OUT_BUFFER_SIZE);
+        if (fputs(te->buffer, outputFile) == EOF)
+        {
+            fprintf(stderr, "Error while writing to the file.");
+            break;
+        }
+        line = line->next;
+        if (line)
+            fputc('\n', outputFile);
+    }
+    fflush(outputFile);
+    fclose(outputFile);
+#ifdef _WIN32
+    remove(fileName);
+#endif
+    rename("text.tmp", fileName);
 }
 
 void textEngineAppendString(struct TextEngine *te, char *s)

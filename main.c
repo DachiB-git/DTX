@@ -2,8 +2,14 @@
 
 int main(int argc, char *argv[])
 {
+    if (argc < 2)
+    {
+        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
+        return 1;
+    }
     struct TextEngine *te = textEngineInit(800, 600, "./AovelSansRounded-rdDL.ttf", 16, (SDL_Color) {255, 255, 255, 255}, (SDL_Color) {0, 0, 0, 255});
     if (te == NULL) return 1;
+    textEngineReadFile(te, argv[1]);
     while (te->isRunning)
     {
         te->frameStart = SDL_GetTicks();
@@ -19,24 +25,7 @@ int main(int argc, char *argv[])
         float frameTime = (SDL_GetTicks() - te->frameStart) / 1000.0;
         SDL_Delay(SDL_floor(16.66f - frameTime));
     }
-    FILE* fh = fopen("dtx.c", "w");
-    if (fh == NULL)
-    {
-        fprintf(stderr, "Unable to open file.");
-    }
-    struct Line *line = te->first;
-    while (line)
-    {
-        stringBuilderToString(line->sb, te->buffer, IN_OUT_BUFFER_SIZE);
-        if (fputs(te->buffer, fh) == EOF)
-        {
-            fprintf(stderr, "Error while writing to the file.");
-            fclose(fh);
-        }
-        fputc('\n', fh);
-        line = line->next;
-    }
-    fclose(fh);
+    textEngineWriteFile(te, argv[1]);
     textEngineCleanUp(te);
     return 0;
 }

@@ -87,6 +87,8 @@ void stringBuilderCleanUp(struct StringBuilder *sb);
 
 struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor);
 void textEngineHandleEvents(struct TextEngine *te);
+void textEngineReadFile(struct TextEngine *te, char *fileName);
+void textEngineWriteFile(struct TextEngine *te, char *fileName);
 void textEngineAppendChar(struct TextEngine *te, char c);
 void textEngineAppendLine(struct TextEngine* te);
 void textEngineAppendString(struct TextEngine *te, char *s);
