@@ -7,73 +7,9 @@ int main(int argc, char *argv[])
     while (te->isRunning)
     {
         te->frameStart = SDL_GetTicks();
-        SDL_Event event;
-        while (SDL_PollEvent(&event))
-        {
-            switch (event.type)
-            {
-            case SDL_QUIT:
-                te->isRunning = 0;
-                break;
-            case SDL_TEXTINPUT:
-                textEngineAppendString(te, event.text.text);
-                break;
-            case SDL_KEYDOWN:
-                if (event.key.keysym.mod & KMOD_SHIFT)
-                {
-                    switch (event.key.keysym.sym)
-                    {
-                        // case SDLK_KP_PLUS:
-                        //     fontSize += 8;
-                        //     TTF_CloseFont(font);
-                        //     font = TTF_OpenFont(fontName, (int) (fontSize * wScale));
-                        //     // TTF_SizeUTF8(font, " ", &cursor.fontWidth, &cursor.fontHeight);
-                        //     // update prevSize to force rerender
-                        //     SDL_FlushEvent(SDL_TEXTINPUT);
-                        //     break;
-                        // case SDLK_KP_MINUS:
-                        //     if (fontSize > 8)
-                        //     {
-                        //     fontSize -= 8;
-                        //     TTF_CloseFont(font);
-                        //     font = TTF_OpenFont(fontName, (int) (fontSize * wScale));
-                        //     // TTF_SizeUTF8(font, " ", &cursor.fontWidth, &cursor.fontHeight);
-                        //     // update prevSize to force rerender
-                        //     }
-                        //     SDL_FlushEvent(SDL_TEXTINPUT);
-                        //     break;
-                        default:
-                            break;
-                    }
-                }
-                else
-                {
-                    switch (event.key.keysym.sym)
-                    {
-                        case SDLK_BACKSPACE:
-                            textEnginePopCharUTF8(te);
-                            break;
-                        case SDLK_RETURN:
-                        case SDLK_KP_ENTER:
-                            textEngineRenderLine(te, te->currentLine);
-                            textEngineAppendLine(te);
-                            break;
-                        case SDLK_TAB:
-                            textEngineAppendChar(te, ' ');
-                            textEngineAppendChar(te, ' ');
-                            textEngineAppendChar(te, ' ');
-                            textEngineAppendChar(te, ' ');
-                        default:
-                            break;
-                    }
-                }
-                break;
-            default:
-                break;
-            }
-        }
+        textEngineHandleEvents(te);
         textEnginePollCursorBlinkTimer(te);
-        // only force rerender if the text buffer gets updated
+        // only force rerender if the text buffer gets updated or cursor state changes
         if (te->shouldRerenderLines || te->shouldRerenderCursor)
         {
             textEngineRerenderLines(te);

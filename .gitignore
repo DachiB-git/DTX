@@ -1,0 +1,6 @@
+.vscode
+*/
+*.bat
+*.exe
+dtx.c
+*.dll
