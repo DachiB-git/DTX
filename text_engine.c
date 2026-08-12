@@ -143,8 +143,8 @@ void lineCleanUp(struct Line *line)
     {
         curr = line;
         stringBuilderCleanUp(curr->sb);
-        free(curr);
         line = line->next;
+        free(curr);
     }
     return;
 }
@@ -812,5 +812,6 @@ void textEngineCleanUp(struct TextEngine *te)
     lineCleanUp(te->first);
     TTF_Quit();
     SDL_Quit();
+    free(te);
     return;
 }
