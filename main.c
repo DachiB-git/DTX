@@ -7,7 +7,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
         return 1;
     }
-    struct TextEngine *te = textEngineInit(800, 600, "./AovelSansRounded-rdDL.ttf", 16, (SDL_Color) {255, 255, 255, 255}, (SDL_Color) {0, 0, 0, 255});
+    // TODO: fix cursor background blink mask with colors other than black and white
+    struct TextEngine *te = textEngineInit(800, 600, "AovelSansRounded-rdDL.ttf", 16, (SDL_Color) {255, 255, 255, 255}, (SDL_Color) {0, 0, 0, 255});
     if (te == NULL) return 1;
     textEngineReadFile(te, argv[1]);
     while (te->isRunning)

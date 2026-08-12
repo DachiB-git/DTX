@@ -9,9 +9,11 @@
 
 #define IN_OUT_BUFFER_SIZE 512
 #define isUTF8ContByte(c) ((c & 0xC0) == 0x80) 
+#define SDLColorToInt(c) ((c.r << 24) | (c.g << 16) | (c.b << 8) | c.a)
 
 struct Cursor
 {
+    struct Node *currentNode;
     float offsetX;
     float offsetY;
     float width;
@@ -23,15 +25,15 @@ struct Cursor
 struct Node
 {
     char c;
-    struct Node* prev;
-    struct Node* next;
+    struct Node *prev;
+    struct Node *next;
 };
 
 struct StringBuilder
 {
     unsigned int size;
-    struct Node* head;
-    struct Node* tail;
+    struct Node *head;
+    struct Node *tail;
 };
 
 struct Line
@@ -67,22 +69,30 @@ struct TextEngine
     unsigned int frameStart;
     unsigned int shouldRerenderLines;
     unsigned int shouldRerenderCursor;
-    struct Line* currentLine;
-    struct Line* first;
-    struct Line* last;
+    struct Line *currentLine;
+    struct Line *first;
+    struct Line *last;
 };
+
+struct Node* cursorSeekNextCodePoint(struct TextEngine *te);
+struct Node* cursorSeekPrevCodePoint(struct TextEngine *te);
+void cursorMoveUp(struct TextEngine *te);
+void cursorMoveDown(struct TextEngine *te);
+void cursorMoveLeft(struct TextEngine *te);
+void cursorMoveRight(struct TextEngine *te);
+float cursorGetOffsetWidth(struct TextEngine *te);
 
 struct Node* getNode(char c, struct Node* next, struct Node* prev);
 
-struct Line* getLine(struct Line* next, struct Line* prev);
-void lineCleanUp(struct Line* line);
+struct Line* getLine(struct Line *next, struct Line *prev);
+void lineCleanUp(struct Line *line);
 
 struct StringBuilder* stringBuilderInit();
-int stringBuilderAppend(struct StringBuilder* sb, char c);
-int stringBuilderAppendString(struct StringBuilder* sb, char *s);
-void stringBuilderPop(struct StringBuilder* sb);
-void stringBuilderPopUTF8(struct StringBuilder* sb);
-void stringBuilderToString(struct StringBuilder* sb, char *buffer, unsigned int size);
+int stringBuilderAppend(struct StringBuilder *sb, char c);
+int stringBuilderAppendString(struct StringBuilder *sb, char *s);
+void stringBuilderPop(struct StringBuilder *sb);
+void stringBuilderPopUTF8(struct StringBuilder *sb);
+void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int size);
 void stringBuilderCleanUp(struct StringBuilder *sb);
 
 struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor);
@@ -98,6 +108,7 @@ void textEnginePollCursorBlinkTimer(struct TextEngine *te);
 void textEngineRenderCursor(struct TextEngine *te);
 void textEngineRenderLine(struct TextEngine *te, struct Line *line);
 void textEngineRerenderLines(struct TextEngine *te);
+void textEngineRecalculateLines(struct TextEngine *te);
 void textEngineCleanUp(struct TextEngine *te);
 
 #endif
