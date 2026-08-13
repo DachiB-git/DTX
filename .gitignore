@@ -4,3 +4,7 @@
 *.exe
 dtx.c
 *.dll
+test.c
+lsan.supp
+dtx
+build.sh
