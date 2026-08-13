@@ -279,7 +279,7 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
         textEngineCleanUp(te);
         return NULL;
     }
-    te->window = SDL_CreateWindow("DTX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, te->windowWidth, te->windowHeight, SDL_WINDOW_ALLOW_HIGHDPI);
+    te->window = SDL_CreateWindow("DTX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, te->windowWidth, te->windowHeight, SDL_WINDOW_HIDDEN | SDL_WINDOW_ALLOW_HIGHDPI);
     if (te->window == NULL)
     {
         fprintf(stderr, "Failed to create a window: %s\n", SDL_GetError());
@@ -324,6 +324,7 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
     te->cursor.offsetY = 0;
     te->cursor.width = 2.0;
     te->isRunning = 1;
+    SDL_ShowWindow(te->window);
     return te;
 }
 
