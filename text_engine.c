@@ -636,7 +636,12 @@ void textEngineReadFile(struct TextEngine *te, char *fileName)
         // we append the string to the engine
         // we insert a newline
         // we shift the buffer
-        if (b[i] == '\n' || b[i] == '\0')
+        if (b[i] == '\0')
+        {
+            textEngineAppendString(te, b);
+            break;
+        }
+        if (b[i] == '\n')
         {
             b[i++] = '\0';
             textEngineAppendString(te, b);
