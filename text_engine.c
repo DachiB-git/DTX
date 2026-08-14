@@ -469,6 +469,7 @@ void textEngineAppendLine(struct TextEngine* te)
 void textEnginePopLine(struct TextEngine *te)
 {
     if (te == NULL) return;
+    if (te->currentLine == te->first) return;
     te->lines--;
     te->last = te->last->prev;
     lineCleanUp(te->last->next);
