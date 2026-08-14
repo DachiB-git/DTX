@@ -55,6 +55,7 @@ struct TextEngine
     SDL_Renderer *renderer;
     float renderScale;
     TTF_Font *font;
+    char *fontFilePath;
     int fontSize;
     int windowWidth;
     int windowHeight;

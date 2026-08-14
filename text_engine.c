@@ -316,8 +316,8 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
     size_t pathLen = SDL_strlen(basePath) + SDL_strlen(fontFileName) + 1;
     char *fullPath = malloc(sizeof(char) * pathLen);
     snprintf(fullPath, pathLen, "%s%s", basePath, fontFileName);
-    te->font = TTF_OpenFont(fullPath, (int) (fontSize * te->renderScale));
-    free(fullPath);
+    te->fontFilePath = fullPath;
+    te->font = TTF_OpenFont(te->fontFilePath, (int) (fontSize * te->renderScale));
     SDL_free(basePath);    
     if (te->font == NULL)
     {
@@ -354,69 +354,83 @@ void textEngineHandleEvents(struct TextEngine *te)
             textEngineAppendString(te, event.text.text);
             break;
         case SDL_KEYDOWN:
-            if (event.key.keysym.mod & KMOD_SHIFT)
+            switch (event.key.keysym.sym)
             {
-                switch (event.key.keysym.sym)
-                {
-                    // case SDLK_KP_PLUS:
-                    //     fontSize += 8;
-                    //     TTF_CloseFont(font);
-                    //     font = TTF_OpenFont(fontName, (int) (fontSize * wScale));
-                    //     // TTF_SizeUTF8(font, " ", &cursor.fontWidth, &cursor.fontHeight);
-                    //     // update prevSize to force rerender
-                    //     SDL_FlushEvent(SDL_TEXTINPUT);
-                    //     break;
-                    // case SDLK_KP_MINUS:
-                    //     if (fontSize > 8)
-                    //     {
-                    //     fontSize -= 8;
-                    //     TTF_CloseFont(font);
-                    //     font = TTF_OpenFont(fontName, (int) (fontSize * wScale));
-                    //     // TTF_SizeUTF8(font, " ", &cursor.fontWidth, &cursor.fontHeight);
-                    //     // update prevSize to force rerender
-                    //     }
-                    //     SDL_FlushEvent(SDL_TEXTINPUT);
-                    //     break;
-                    default:
-                        break;
-                }
-            }
-            else
-            {
-                switch (event.key.keysym.sym)
-                {
-                    case SDLK_ESCAPE:
-                        SDL_PushEvent(&(SDL_Event){.type = SDL_QUIT});
-                        break;
-                    case SDLK_BACKSPACE:
-                        textEnginePopCharUTF8(te);
-                        break;
-                    case SDLK_RETURN:
-                    case SDLK_KP_ENTER:
-                        textEngineRenderLine(te, te->currentLine);
-                        textEngineAppendLine(te);
-                        break;
-                    case SDLK_TAB:
-                        textEngineAppendString(te, " ");
-                        textEngineAppendString(te, " ");
-                        textEngineAppendString(te, " ");
-                        textEngineAppendString(te, " ");
-                        break;
-                    case SDLK_DOWN:
-                        cursorMoveDown(te);
-                        break;
-                    case SDLK_UP:
-                        cursorMoveUp(te);
-                        break;
-                    case SDLK_LEFT:
-                        cursorMoveLeft(te);
-                        break;
-                    case SDLK_RIGHT:
-                        cursorMoveRight(te);
-                        break;
-                    default:
-                        break;
-                }
+                case SDLK_ESCAPE:
+                    SDL_PushEvent(&(SDL_Event){.type = SDL_QUIT});
+                    break;
+                case SDLK_BACKSPACE:
+                    textEnginePopCharUTF8(te);
+                    break;
+                case SDLK_RETURN:
+                case SDLK_KP_ENTER:
+                    textEngineRenderLine(te, te->currentLine);
+                    textEngineAppendLine(te);
+                    break;
+                case SDLK_TAB:
+                    textEngineAppendString(te, " ");
+                    textEngineAppendString(te, " ");
+                    textEngineAppendString(te, " ");
+                    textEngineAppendString(te, " ");
+                    break;
+                case SDLK_DOWN:
+                    cursorMoveDown(te);
+                    break;
+                case SDLK_UP:
+                    cursorMoveUp(te);
+                    break;
+                case SDLK_LEFT:
+                    cursorMoveLeft(te);
+                    break;
+                case SDLK_RIGHT:
+                    cursorMoveRight(te);
+                    break;
+                case SDLK_KP_PLUS:
+                    if (event.key.keysym.mod & KMOD_CTRL)
+                    {
+                        te->fontSize += 4;
+                        TTF_Font *font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
+                        if (font == NULL)
+                        {
+                            fprintf(stderr, "Unable to reopen the font. %s. Falling back to font size: %d.\n", SDL_GetError(), te->fontSize - 4);
+                            te->fontSize -= 4;
+                        }
+                        else
+                        {
+                            TTF_CloseFont(te->font);
+                            te->font = font;
+                            te->font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
+                            te->lineHeight = (float) TTF_FontLineSkip(te->font) / te->renderScale;
+                            SDL_FlushEvent(SDL_TEXTINPUT);
+                            textEngineRecalculateLines(te);
+                        }
+                    }
+                    break;
+                case SDLK_KP_MINUS:
+                    if (event.key.keysym.mod & KMOD_CTRL && te->fontSize > 8)
+                    {
+                        te->fontSize -= 4;
+                        TTF_Font *font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
+                        if (font == NULL)
+                        {
+                            fprintf(stderr, "Unable to reopen the font. %s. Falling back to font size: %d.\n", SDL_GetError(), te->fontSize + 4);
+                            te->fontSize += 4;
+                        }
+                        else
+                        {
+                            TTF_CloseFont(te->font);
+                            te->font = font;
+                            te->font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
+                            te->lineHeight = (float) TTF_FontLineSkip(te->font) / te->renderScale;
+                            SDL_FlushEvent(SDL_TEXTINPUT);
+                            SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
+                            SDL_RenderClear(te->renderer);
+                            textEngineRecalculateLines(te);
+                        }
+                    }
+                    break;
+                default:
+                    break;
             }
             break;
         default:
