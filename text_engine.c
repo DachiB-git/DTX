@@ -242,6 +242,18 @@ void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int 
     return;
 }
 
+unsigned int stringBuilderCalculateSize(struct StringBuilder *sb)
+{
+    struct Node *head = sb->head;
+    unsigned int size = 0;
+    while (head)
+    {
+        size++;
+        head = head->next;
+    }
+    return size;
+}
+
 struct Line* getLine(struct Line *next, struct Line *prev)
 {
     struct Line *line = malloc(sizeof(*line));
@@ -428,40 +440,52 @@ void textEngineAppendLine(struct TextEngine* te)
         return;
     }
     line = getLine(NULL, NULL);
-    // // cursor is not at the end
-    // if (te->cursor.currentNode != te->currentLine->sb->tail)
-    // {
-    //     // cursor is at the beginning
-    //     if (te->cursor.currentNode == NULL)
-    //     {
-    //         // move the whole line
-    //         if (te->currentLine->sb->size != 0)
-    //         {
-    //             line->sb->size = te->currentLine->sb->size;
-    //             line->sb->head = te->currentLine->sb->head;
-    //             line->sb->tail = te->currentLine->sb->tail;
-    //             memset(te->currentLine->sb, 0, sizeof(*(te->currentLine->sb)));
-    //             textEngineRenderLine(te, te->currentLine);
-    //             line->shouldRerender = 1;
-    //             te->shouldRerenderLines = 1;
-    //             te->lines++;
-    //             te->cursor.currentNode = NULL;
-    //             return;
-    //         }
-    //     }
-    //     else
-    //     {
-
-    //     }
-    //     // move down portion of the previous line
-    // }
-    // cursor is at the end
-    line->prev = te->last;
-    te->last->next = line;
-    line->offsetY = te->last->offsetY + te->lineHeight;
-    te->last = line;
     te->lines++;
-    te->currentLine = te->last;
+    // cursor is not at the end
+    if (te->cursor.currentNode != te->currentLine->sb->tail)
+    {
+        // cursor is at the beginning
+        line->sb->tail = te->currentLine->sb->tail;
+        // move the whole line
+        if (te->cursor.currentNode == NULL)
+        {
+            line->sb->head = te->currentLine->sb->head;
+            line->sb->size = te->currentLine->sb->size;
+            memset(te->currentLine->sb, 0, sizeof(*(te->currentLine->sb)));
+        }
+        else
+        // move portion of the line
+        {
+            line->sb->head = te->cursor.currentNode->next;
+            line->sb->head->prev = NULL;
+            line->sb->size = stringBuilderCalculateSize(line->sb);
+            te->currentLine->sb->tail = te->cursor.currentNode;
+            te->currentLine->sb->tail->next = NULL;
+            te->currentLine->sb->size -= line->sb->size;
+        }
+        textEngineRenderLine(te, te->currentLine);
+        line->shouldRerender = 1;
+        te->shouldRerenderLines = 1;
+    }
+    if (te->currentLine == te->last)
+    {
+        line->prev = te->last;
+        te->last->next = line;
+        line->offsetY = te->last->offsetY + te->lineHeight;
+        te->last = line;
+        te->currentLine = te->last;
+    }
+    else
+    {
+        line->offsetY = te->currentLine->offsetY + te->lineHeight;
+        line->prev = te->currentLine;
+        struct Line *rest = te->currentLine->next;
+        te->currentLine->next = line;
+        line->next = rest;
+        rest->prev = line;
+        te->currentLine = line;
+        textEngineRecalculateLines(te);
+    }
     te->cursor.currentNode = NULL;
     return;
 }
@@ -553,8 +577,10 @@ void textEnginePopCharUTF8(struct TextEngine *te)
                 te->last->next = restLines;
                 restLines->prev = te->last;
                 te->last = lastLine;
-                SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
-                SDL_RenderClear(te->renderer);
+                int sizeCache = te->last->sb->size;
+                te->last->sb->size = 0;
+                textEngineRenderLine(te, te->last);
+                te->last->sb->size = sizeCache;
                 textEngineRecalculateLines(te);
             }
             te->cursor.currentNode = oldTail;
@@ -586,8 +612,27 @@ void textEnginePopCharUTF8(struct TextEngine *te)
     {
         if (te->currentLine->sb->size == 0)
         {
-            textEngineRenderLine(te, te->currentLine);
-            textEnginePopLine(te);
+            if (te->currentLine != te->last)
+            {
+                unsigned int sizeCache = te->last->sb->size;
+                te->last->sb->size = 0;
+                textEngineRenderLine(te, te->last);
+                te->last->sb->size = sizeCache;
+                struct Line *rest = te->currentLine->next;
+                struct Line *oldLast = te->last;
+                te->currentLine->next = NULL;
+                te->last = te->currentLine;
+                textEnginePopLine(te);
+                te->currentLine->next = rest;
+                rest->prev = te->currentLine;
+                te->last = oldLast;
+                textEngineRecalculateLines(te);
+            }
+            else
+            {
+                textEngineRenderLine(te, te->currentLine);
+                textEnginePopLine(te);
+            }
         }
         else
         {

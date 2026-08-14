@@ -93,6 +93,7 @@ int stringBuilderAppendString(struct StringBuilder *sb, char *s);
 void stringBuilderPop(struct StringBuilder *sb);
 void stringBuilderPopUTF8(struct StringBuilder *sb);
 void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int size);
+unsigned int stringBuilderCalculateSize(struct StringBuilder *sb);
 void stringBuilderCleanUp(struct StringBuilder *sb);
 
 struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor);
