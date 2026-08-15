@@ -316,6 +316,7 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
     {
         SDL_SetWindowIcon(te->window, iconSurface);
         SDL_FreeSurface(iconSurface);
+        free(iconPath);
     }
     te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_ACCELERATED);
     if (te->renderer == NULL)
