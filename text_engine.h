@@ -42,6 +42,7 @@ struct Line
     float offsetY;
     float width;
     float height;
+    unsigned int lineNumber;
     unsigned int shouldRerender;
     struct StringBuilder *sb;
     struct Line *next;
@@ -109,6 +110,7 @@ void textEnginePopCharUTF8(struct TextEngine *te);
 void textEnginePopLine(struct TextEngine *te);
 void textEnginePollCursorBlinkTimer(struct TextEngine *te);
 void textEngineRenderCursor(struct TextEngine *te);
+void textEngineClearLine(struct TextEngine *te, struct Line *line);
 void textEngineRenderLine(struct TextEngine *te, struct Line *line);
 void textEngineRerenderLines(struct TextEngine *te);
 void textEngineRecalculateLines(struct TextEngine *te);

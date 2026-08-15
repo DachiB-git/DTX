@@ -471,15 +471,19 @@ void textEngineAppendLine(struct TextEngine* te)
     if (te->lines == 0)
     {
         line = getLine(NULL, NULL);
+        line->offsetX = te->fontSize * 3;
+        te->lines++;
+        line->lineNumber = te->lines;
         te->first = line;
         te->last = line;
         te->currentLine = line;
         te->cursor.currentNode = NULL;
-        te->lines++;
         return;
     }
     line = getLine(NULL, NULL);
+    line->offsetX = te->fontSize * 3;
     te->lines++;
+    line->lineNumber = te->lines;
     // cursor is not at the end
     if (te->cursor.currentNode != te->currentLine->sb->tail)
     {
@@ -513,6 +517,9 @@ void textEngineAppendLine(struct TextEngine* te)
         line->offsetY = te->last->offsetY + te->lineHeight;
         te->last = line;
         te->currentLine = te->last;
+        // cursorMoveDown(te);
+        te->cursor.currentNode = NULL;
+        textEngineRenderLine(te, te->last);
     }
     else
     {
@@ -524,8 +531,8 @@ void textEngineAppendLine(struct TextEngine* te)
         rest->prev = line;
         te->currentLine = line;
         textEngineRecalculateLines(te);
+        te->cursor.currentNode = NULL;
     }
-    te->cursor.currentNode = NULL;
     return;
 }
 
@@ -541,11 +548,33 @@ void textEnginePopLine(struct TextEngine *te)
     return;
 }
 
-void textEngineRenderLine(struct TextEngine *te, struct Line *line)
+void textEngineClearLine(struct TextEngine *te, struct Line *line)
 {
-    SDL_FRect oldTextRect = {line->offsetX, line->offsetY, (float) te->renderWidth, (float) te->lineHeight};
+    SDL_FRect oldTextRect = {0, line->offsetY, (float) te->renderWidth, (float) te->lineHeight};
     SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
     SDL_RenderFillRectF(te->renderer, &oldTextRect);
+    SDL_RenderPresent(te->renderer);
+    return;
+}
+
+void textEngineRenderLine(struct TextEngine *te, struct Line *line)
+{
+    SDL_FRect oldTextRect = {0, line->offsetY, (float) te->renderWidth, (float) te->lineHeight};
+    SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
+    SDL_RenderFillRectF(te->renderer, &oldTextRect);
+    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, "%5d", line->lineNumber);
+    SDL_Surface *lineCounterSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, (SDL_Color) {255, 255, 0, 255});
+    SDL_Texture *lineCounterTexture = SDL_CreateTextureFromSurface(te->renderer, lineCounterSurface);
+    SDL_FRect lineCounterRect =
+    {
+        0,
+        line->offsetY,
+        (float) lineCounterSurface->w / te->renderScale,
+        (float) lineCounterSurface->h / te->renderScale
+    };
+    SDL_FreeSurface(lineCounterSurface);
+    SDL_RenderCopyF(te->renderer, lineCounterTexture, NULL, &lineCounterRect);
+    SDL_DestroyTexture(lineCounterTexture);
     stringBuilderToString(line->sb, te->buffer, IN_OUT_BUFFER_SIZE);
     line->shouldRerender = 0;
     if (line->sb->size != 0)
@@ -601,8 +630,9 @@ void textEnginePopCharUTF8(struct TextEngine *te)
                 te->currentLine->prev->sb->tail = te->currentLine->sb->tail;
                 te->currentLine->prev->sb->size += te->currentLine->sb->size;
             }                
-            te->currentLine->sb->size = 0;
-            textEngineRenderLine(te, te->currentLine);
+            // te->currentLine->sb->size = 0;
+            // textEngineRenderLine(te, te->currentLine);
+            textEngineClearLine(te, te->currentLine);
             // manual free to preserve nodes
             free(te->currentLine->sb);
             te->currentLine->sb = NULL;
@@ -616,10 +646,11 @@ void textEnginePopCharUTF8(struct TextEngine *te)
                 te->last->next = restLines;
                 restLines->prev = te->last;
                 te->last = lastLine;
-                int sizeCache = te->last->sb->size;
-                te->last->sb->size = 0;
-                textEngineRenderLine(te, te->last);
-                te->last->sb->size = sizeCache;
+                // int sizeCache = te->last->sb->size;
+                // te->last->sb->size = 0;
+                // textEngineRenderLine(te, te->last);
+                // te->last->sb->size = sizeCache;
+                textEngineClearLine(te, te->last);
                 textEngineRecalculateLines(te);
             }
             te->cursor.currentNode = oldTail;
@@ -653,10 +684,11 @@ void textEnginePopCharUTF8(struct TextEngine *te)
         {
             if (te->currentLine != te->last)
             {
-                unsigned int sizeCache = te->last->sb->size;
-                te->last->sb->size = 0;
-                textEngineRenderLine(te, te->last);
-                te->last->sb->size = sizeCache;
+                // unsigned int sizeCache = te->last->sb->size;
+                // te->last->sb->size = 0;
+                // textEngineRenderLine(te, te->last);
+                // te->last->sb->size = sizeCache;
+                textEngineClearLine(te, te->last);
                 struct Line *rest = te->currentLine->next;
                 struct Line *oldLast = te->last;
                 te->currentLine->next = NULL;
@@ -669,7 +701,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
             }
             else
             {
-                textEngineRenderLine(te, te->currentLine);
+                textEngineClearLine(te, te->last);
                 textEnginePopLine(te);
             }
         }
@@ -816,15 +848,16 @@ void textEngineRenderCursor(struct TextEngine *te)
 {   
     SDL_FRect cursorRect = {0};
     cursorRect.y = te->currentLine->offsetY;
+    cursorRect.x = te->currentLine->offsetX;
     if (te->cursor.currentNode != NULL)
     {
         if (te->cursor.currentNode == te->currentLine->sb->tail)
         {
-            cursorRect.x = te->currentLine->width;
+            cursorRect.x += te->currentLine->width;
         }
         else
         {
-            cursorRect.x = cursorGetOffsetWidth(te);
+            cursorRect.x += cursorGetOffsetWidth(te);
         }
     }
     cursorRect.w = te->cursor.width;
@@ -857,6 +890,7 @@ void textEngineRenderCursor(struct TextEngine *te)
         SDL_RenderFillRectF(te->renderer, &cursorRect);
         SDL_SetRenderDrawColor(te->renderer, cachedColor.r, cachedColor.b, cachedColor.g, cachedColor.a);
     }
+    SDL_RenderPresent(te->renderer);
     return;
 }
 
@@ -880,13 +914,17 @@ void textEngineRecalculateLines(struct TextEngine *te)
 {
     if (te == NULL) return;
     struct Line *line = te->first;
+    line->offsetX = te->fontSize * 3;
     line->offsetY = 0;
     line->shouldRerender = 1;
+    line->lineNumber = 1;
     line = line->next;
     while (line)
     {
         line->shouldRerender = 1;
+        line->offsetX = te->fontSize * 3;
         line->offsetY = line->prev->offsetY + te->lineHeight;
+        line->lineNumber = line->prev->lineNumber + 1;
         line = line->next;
     }
     te->shouldRerenderLines = 1;
