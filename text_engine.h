@@ -99,6 +99,7 @@ void stringBuilderCleanUp(struct StringBuilder *sb);
 
 struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor);
 void textEngineHandleEvents(struct TextEngine *te);
+char* textEngineGetResourcePath(char *fileName);
 void textEngineReadFile(struct TextEngine *te, char *fileName);
 void textEngineWriteFile(struct TextEngine *te, char *fileName);
 void textEngineAppendChar(struct TextEngine *te, char c);

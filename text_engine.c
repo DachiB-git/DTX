@@ -310,6 +310,13 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
         textEngineCleanUp(te);
         return NULL;
     }
+    char *iconPath = textEngineGetResourcePath("dtx.bmp");
+    SDL_Surface* iconSurface = SDL_LoadBMP(iconPath);
+    if (iconSurface != NULL)
+    {
+        SDL_SetWindowIcon(te->window, iconSurface);
+        SDL_FreeSurface(iconSurface);
+    }
     te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_ACCELERATED);
     if (te->renderer == NULL)
     {
@@ -324,13 +331,8 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
     SDL_RenderSetScale(te->renderer, te->renderScale, te->renderScale);
     SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
     SDL_RenderClear(te->renderer);
-    char *basePath = SDL_GetBasePath();
-    size_t pathLen = SDL_strlen(basePath) + SDL_strlen(fontFileName) + 1;
-    char *fullPath = malloc(sizeof(char) * pathLen);
-    snprintf(fullPath, pathLen, "%s%s", basePath, fontFileName);
-    te->fontFilePath = fullPath;
+    te->fontFilePath = textEngineGetResourcePath(fontFileName);
     te->font = TTF_OpenFont(te->fontFilePath, (int) (fontSize * te->renderScale));
-    SDL_free(basePath);    
     if (te->font == NULL)
     {
         fprintf(stderr, "Failed to open font: %s\n", SDL_GetError());
@@ -350,6 +352,16 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
     te->isRunning = 1;
     SDL_ShowWindow(te->window);
     return te;
+}
+
+char* textEngineGetResourcePath(char *fileName)
+{
+    char *basePath = SDL_GetBasePath();
+    size_t pathLen = SDL_strlen(basePath) + SDL_strlen(fileName) + 1;
+    char *fullPath = malloc(sizeof(char) * pathLen);
+    snprintf(fullPath, pathLen, "%s%s", basePath, fileName);
+    SDL_free(basePath);
+    return fullPath;
 }
 
 void textEngineHandleEvents(struct TextEngine *te)
@@ -887,6 +899,7 @@ void textEngineCleanUp(struct TextEngine *te)
     SDL_DestroyRenderer(te->renderer);
     TTF_CloseFont(te->font);
     lineCleanUp(te->first);
+    free(te->fontFilePath);
     TTF_Quit();
     SDL_Quit();
     free(te);
