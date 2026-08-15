@@ -13,22 +13,26 @@ struct Node* cursorSeekNextCodePoint(struct TextEngine *te)
 {
     if (te == NULL) return NULL;
     struct Node *node = te->cursor.currentNode;
+    // empty lines can't show up here, so cursor is at the start
     if (node == NULL)
     {
-        // dummy node to shift from
-        struct Node dummy;
-        dummy.next = te->currentLine->sb->head; 
-        node = &dummy;
+        // set node to the first character of the line
+        node = te->currentLine->sb->head;
     }
-    if (node->next == NULL) return node;
-    // 00000
-    // 11000
-    // 11100
+    else
+    // cursor is inside the line, either at the last byte of a multibyte utf char
+    // or a single byte code point
+    // so we shift over to reach the next code point
+    {
+        node = node->next;
+    }
+    // 0xxxx
+    // 110xx
+    // 1110x
     // 11110
-    node = node->next;
     if ((node->c & 0x80) == 0) return node;
-    if ((node->c & 0xC0) == 0xC0) return node->next;
-    if ((node->c & 0xE0) == 0xE0)
+    if ((node->c & 0xE0) == 0xC0) return node->next;
+    if ((node->c & 0xF0) == 0xE0)
     {
         node = node->next;
         return node->next;
