@@ -687,6 +687,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
     {
         if (te->currentLine->sb->size == 0)
         {
+            if (te->currentLine == te->first) return;
             if (te->currentLine != te->last)
             {
                 // unsigned int sizeCache = te->last->sb->size;
