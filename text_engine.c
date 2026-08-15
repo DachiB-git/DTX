@@ -45,6 +45,7 @@ struct Node* cursorSeekNextCodePoint(struct TextEngine *te)
 void cursorMoveUp(struct TextEngine *te)
 {
     if (te == NULL) return;
+    if (te->currentLine == te->first && te->cursor.currentNode == NULL) return;
     textEngineRenderLine(te, te->currentLine);
     te->cursor.blinkState = 0xFF;
     te->cursor.blinkStart = SDL_GetTicks();
@@ -66,6 +67,7 @@ void cursorMoveUp(struct TextEngine *te)
 void cursorMoveDown(struct TextEngine *te)
 {
     if (te == NULL) return;
+    if (te->currentLine == te->last && te->cursor.currentNode == te->currentLine->sb->tail) return;
     textEngineRenderLine(te, te->currentLine);
     te->cursor.blinkState = 0xFF;
     te->cursor.blinkStart = SDL_GetTicks();
@@ -81,6 +83,7 @@ void cursorMoveDown(struct TextEngine *te)
 void cursorMoveLeft(struct TextEngine *te)
 {
     if (te == NULL) return;
+    if (te->currentLine == te->first && te->cursor.currentNode == NULL) return;
     textEngineRenderLine(te, te->currentLine);
     te->cursor.blinkState = 0xFF;
     te->cursor.blinkStart = SDL_GetTicks();
@@ -103,6 +106,7 @@ void cursorMoveLeft(struct TextEngine *te)
 void cursorMoveRight(struct TextEngine *te)
 {
     if (te == NULL) return;
+    if (te->currentLine == te->last && te->cursor.currentNode == te->currentLine->sb->tail) return;
     textEngineRenderLine(te, te->currentLine);
     te->cursor.blinkState = 0xFF;
     te->cursor.blinkStart = SDL_GetTicks();
