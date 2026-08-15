@@ -43,6 +43,8 @@ void cursorMoveUp(struct TextEngine *te)
     if (te == NULL) return;
     textEngineRenderLine(te, te->currentLine);
     te->cursor.blinkState = 0xFF;
+    te->cursor.blinkStart = SDL_GetTicks();
+    te->shouldRerenderCursor = 1;
     if (te->currentLine == te->first)
     {
         te->cursor.currentNode = NULL;
@@ -62,6 +64,8 @@ void cursorMoveDown(struct TextEngine *te)
     if (te == NULL) return;
     textEngineRenderLine(te, te->currentLine);
     te->cursor.blinkState = 0xFF;
+    te->cursor.blinkStart = SDL_GetTicks();
+    te->shouldRerenderCursor = 1;
     if (te->currentLine != te->last)
         te->currentLine = te->currentLine->next;
     te->cursor.currentNode = te->currentLine->sb->tail;
@@ -75,6 +79,8 @@ void cursorMoveLeft(struct TextEngine *te)
     if (te == NULL) return;
     textEngineRenderLine(te, te->currentLine);
     te->cursor.blinkState = 0xFF;
+    te->cursor.blinkStart = SDL_GetTicks();
+    te->shouldRerenderCursor = 1;
     if (te->currentLine->sb->size == 0 || te->cursor.currentNode == NULL)
     {
         if (te->currentLine->prev == NULL) return;
@@ -95,6 +101,8 @@ void cursorMoveRight(struct TextEngine *te)
     if (te == NULL) return;
     textEngineRenderLine(te, te->currentLine);
     te->cursor.blinkState = 0xFF;
+    te->cursor.blinkStart = SDL_GetTicks();
+    te->shouldRerenderCursor = 1;
     if (te->currentLine->sb->size == 0 || te->cursor.currentNode == te->currentLine->sb->tail)
     {
         if (te->currentLine->next == NULL) return;
