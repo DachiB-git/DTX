@@ -482,6 +482,7 @@ void textEngineAppendLine(struct TextEngine* te)
         te->last = line;
         te->currentLine = line;
         te->cursor.currentNode = NULL;
+        textEngineRenderLine(te, te->currentLine);
         return;
     }
     line = getLine(NULL, NULL);
