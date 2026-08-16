@@ -857,6 +857,7 @@ void textEngineAppendString(struct TextEngine *te, char *s)
     }
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
+    cursorResetBlinkState(te);
     return;
 }
 
