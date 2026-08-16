@@ -8,7 +8,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     // TODO: fix cursor background blink mask with colors other than black and white
-    struct TextEngine *te = textEngineInit(800, 600, "AovelSansRounded-rdDL.ttf", 16, (SDL_Color) {255, 255, 255, 255}, (SDL_Color) {0, 0, 0, 255});
+    struct TextEngine *te = textEngineInit(800, 600, "Courier Prime.ttf", 16, (SDL_Color) {255, 255, 255, 255}, (SDL_Color) {0, 0, 0, 255});
     if (te == NULL) return 1;
     textEngineReadFile(te, argv[1]);
     while (te->isRunning)
