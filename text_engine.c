@@ -401,6 +401,7 @@ void textEngineHandleEvents(struct TextEngine *te)
                     textEngineAppendString(te, " ");
                     textEngineAppendString(te, " ");
                     textEngineAppendString(te, " ");
+                    te->currentLine->indentationDepth++;
                     break;
                 case SDLK_DOWN:
                     cursorMoveDown(te);
@@ -487,6 +488,7 @@ void textEngineAppendLine(struct TextEngine* te)
     }
     line = getLine(NULL, NULL);
     line->offsetX = te->fontSize * 3;
+    line->indentationDepth = te->currentLine->indentationDepth;
     te->lines++;
     line->lineNumber = te->lines;
     // cursor is not at the end
@@ -537,6 +539,16 @@ void textEngineAppendLine(struct TextEngine* te)
         te->currentLine = line;
         textEngineRecalculateLines(te);
         te->cursor.currentNode = NULL;
+    }
+    if (te->currentLine->indentationDepth > 0)
+    {
+        for (int i = 0; i < te->currentLine->indentationDepth; i++)
+        {
+            textEngineAppendString(te, " ");
+            textEngineAppendString(te, " ");
+            textEngineAppendString(te, " ");
+            textEngineAppendString(te, " ");
+        }
     }
     return;
 }
@@ -742,11 +754,13 @@ void textEngineReadFile(struct TextEngine *te, char *fileName)
     }
     snprintf(te->buffer, IN_OUT_BUFFER_SIZE, "DTX | %s", fileName);
     SDL_SetWindowTitle(te->window, te->buffer);
+    // make sure to always have at least a single line ready
+    textEngineAppendLine(te);
     int bytes_read = fread(te->buffer, sizeof(char), IN_OUT_BUFFER_SIZE - 1, fh);
     fclose(fh);
     te->buffer[bytes_read] = '\0';
-    // make sure to always have at least a single line ready
-    textEngineAppendLine(te);
+    printf("%s\n", te->buffer);
+    printf("%s\n", te->buffer);
     int i = 0;
     int acc = 0;
     int wordSize = 0;

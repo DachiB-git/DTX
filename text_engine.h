@@ -43,6 +43,7 @@ struct Line
     float width;
     float height;
     unsigned int lineNumber;
+    unsigned int indentationDepth;
     unsigned int shouldRerender;
     struct StringBuilder *sb;
     struct Line *next;
