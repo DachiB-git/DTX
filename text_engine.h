@@ -84,10 +84,11 @@ void cursorMoveDown(struct TextEngine *te);
 void cursorMoveLeft(struct TextEngine *te);
 void cursorMoveRight(struct TextEngine *te);
 float cursorGetOffsetWidth(struct TextEngine *te);
+void cursorResetBlinkState(struct TextEngine *te);
 
 struct Node* getNode(char c, struct Node* next, struct Node* prev);
 
-struct Line* getLine(struct Line *next, struct Line *prev);
+struct Line* getLine(struct TextEngine *te, struct Line *next, struct Line *prev);
 void lineCleanUp(struct Line *line);
 
 struct StringBuilder* stringBuilderInit();
