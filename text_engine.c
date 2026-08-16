@@ -199,12 +199,21 @@ void stringBuilderPop(struct StringBuilder *sb)
     return;
 }
 
-void stringBuilderPopUTF8(struct StringBuilder *sb)
+void stringBuilderPopUTF8(struct TextEngine *te, struct StringBuilder *sb)
 {
     if (sb == NULL) return;
     if (sb->size == 0) return;
     while (sb->size > 0 && isUTF8ContByte(sb->tail->c)) stringBuilderPop(sb);
-    stringBuilderPop(sb);
+    if (sb->tail->c == ' ' && te->currentLine->indentationEnd == sb->tail)
+    {
+        te->currentLine->indentationDepth--;
+        stringBuilderPop(sb);
+        te->currentLine->indentationEnd = sb->tail;
+    }
+    else
+    {
+        stringBuilderPop(sb);
+    }
     return;
 }
 
@@ -677,7 +686,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
             oldTail = te->currentLine->sb->tail;
             te->cursor.currentNode->next = NULL;
             te->currentLine->sb->tail = te->cursor.currentNode;
-            stringBuilderPopUTF8(te->currentLine->sb);
+            stringBuilderPopUTF8(te, te->currentLine->sb);
             te->cursor.currentNode = te->currentLine->sb->tail;
             if (te->cursor.currentNode == NULL)
             {
@@ -719,16 +728,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
         }
         else
         {
-            if (te->cursor.currentNode == te->currentLine->indentationEnd)
-            {
-                te->currentLine->indentationDepth--;
-                stringBuilderPopUTF8(te->currentLine->sb);
-                te->currentLine->indentationEnd = te->currentLine->sb->tail;
-            }
-            else
-            {
-                stringBuilderPopUTF8(te->currentLine->sb);
-            }
+            stringBuilderPopUTF8(te, te->currentLine->sb);
         }
         te->cursor.currentNode = te->currentLine->sb->tail;
     }

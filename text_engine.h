@@ -96,7 +96,7 @@ struct StringBuilder* stringBuilderInit();
 int stringBuilderAppend(struct StringBuilder *sb, char c);
 int stringBuilderAppendString(struct TextEngine *te, struct StringBuilder *sb, char *s);
 void stringBuilderPop(struct StringBuilder *sb);
-void stringBuilderPopUTF8(struct StringBuilder *sb);
+void stringBuilderPopUTF8(struct TextEngine *te, struct StringBuilder *sb);
 void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int size);
 unsigned int stringBuilderCalculateSize(struct StringBuilder *sb);
 void stringBuilderCleanUp(struct StringBuilder *sb);
