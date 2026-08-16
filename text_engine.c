@@ -230,11 +230,16 @@ int stringBuilderAppend(struct StringBuilder *sb, char c)
     return 0;
 }
 
-int stringBuilderAppendString(struct StringBuilder *sb, char *s)
+int stringBuilderAppendString(struct TextEngine *te, struct StringBuilder *sb, char *s)
 {
     while(*s)
     {
         if (stringBuilderAppend(sb, *s) != 0) return 1;
+        if (*s == ' ' && sb->tail->prev == te->currentLine->indentationEnd)
+        {
+            te->currentLine->indentationEnd = sb->tail;
+            te->currentLine->indentationDepth++;
+        }
         s++;
     }
     return 0;
@@ -399,7 +404,6 @@ void textEngineHandleEvents(struct TextEngine *te)
                     textEngineAppendString(te, " ");
                     textEngineAppendString(te, " ");
                     textEngineAppendString(te, " ");
-                    te->currentLine->indentationDepth += 4;
                     cursorResetBlinkState(te);
                     break;
                 case SDLK_DOWN:
@@ -487,7 +491,6 @@ void textEngineAppendLine(struct TextEngine* te)
         return;
     }
     line = getLine(te, NULL, NULL);
-    line->indentationDepth = te->currentLine->indentationDepth;
     te->lines++;
     line->lineNumber = te->lines;
     // cursor is not at the end
@@ -542,9 +545,10 @@ void textEngineAppendLine(struct TextEngine* te)
         cursorResetBlinkState(te);
         te->cursor.currentNode = NULL;
     }
-    if (te->currentLine->indentationDepth > 0)
+    if (te->currentLine->prev->indentationDepth > 0)
     {
-        for (int i = 0; i < te->currentLine->indentationDepth; i++)
+        printf("%d\n", te->currentLine->prev->indentationDepth);
+        for (int i = 0; i < te->currentLine->prev->indentationDepth; i++)
         {
             textEngineAppendString(te, " ");
         }
@@ -714,9 +718,16 @@ void textEnginePopCharUTF8(struct TextEngine *te)
         }
         else
         {
-            if (te->currentLine->sb->tail->c == ' ')
+            if (te->cursor.currentNode == te->currentLine->indentationEnd)
+            {
                 te->currentLine->indentationDepth--;
-            stringBuilderPopUTF8(te->currentLine->sb);
+                stringBuilderPopUTF8(te->currentLine->sb);
+                te->currentLine->indentationEnd = te->currentLine->sb->tail;
+            }
+            else
+            {
+                stringBuilderPopUTF8(te->currentLine->sb);
+            }
         }
         te->cursor.currentNode = te->currentLine->sb->tail;
     }
@@ -844,7 +855,7 @@ void textEngineAppendString(struct TextEngine *te, char *s)
             te->currentLine->sb->head = NULL;
             te->currentLine->sb->tail = NULL;
         }
-        stringBuilderAppendString(te->currentLine->sb, s);
+        stringBuilderAppendString(te, te->currentLine->sb, s);
         te->currentLine->sb->tail->next = rest;
         rest->prev = te->currentLine->sb->tail;
         te->cursor.currentNode = te->currentLine->sb->tail;
@@ -852,7 +863,7 @@ void textEngineAppendString(struct TextEngine *te, char *s)
     }
     else
     {
-        stringBuilderAppendString(te->currentLine->sb, s);
+        stringBuilderAppendString(te, te->currentLine->sb, s);
         te->cursor.currentNode = te->currentLine->sb->tail;
     }
     te->currentLine->shouldRerender = 1;

@@ -44,6 +44,7 @@ struct Line
     float height;
     unsigned int lineNumber;
     unsigned int indentationDepth;
+    struct Node *indentationEnd;
     unsigned int shouldRerender;
     struct StringBuilder *sb;
     struct Line *next;
@@ -93,7 +94,7 @@ void lineCleanUp(struct Line *line);
 
 struct StringBuilder* stringBuilderInit();
 int stringBuilderAppend(struct StringBuilder *sb, char c);
-int stringBuilderAppendString(struct StringBuilder *sb, char *s);
+int stringBuilderAppendString(struct TextEngine *te, struct StringBuilder *sb, char *s);
 void stringBuilderPop(struct StringBuilder *sb);
 void stringBuilderPopUTF8(struct StringBuilder *sb);
 void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int size);
