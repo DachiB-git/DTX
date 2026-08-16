@@ -772,7 +772,7 @@ void textEngineReadFile(struct TextEngine *te, char *fileName)
                 spaces++;
                 temp++;
             }
-            te->currentLine->indentationDepth = spaces / 4;
+            te->currentLine->indentationDepth = spaces;
             break;
         }
         if (b[i] == '\n')
@@ -788,7 +788,7 @@ void textEngineReadFile(struct TextEngine *te, char *fileName)
                 temp++;
             }
             textEngineAppendLine(te);
-            te->currentLine->prev->indentationDepth = spaces / 4;
+            te->currentLine->prev->indentationDepth = spaces;
             // reset depth to recalculate later
             b += i;
             acc += i;
