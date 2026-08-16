@@ -579,8 +579,9 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
     SDL_FRect oldTextRect = {0, line->offsetY, (float) te->renderWidth, (float) te->lineHeight};
     SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
     SDL_RenderFillRectF(te->renderer, &oldTextRect);
-    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, "%5d", line->lineNumber);
-    SDL_Surface *lineCounterSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, (SDL_Color) {255, 255, 0, 255});
+    char lineCounterBuffer[16];
+    snprintf(lineCounterBuffer, 16, "%5d", line->lineNumber);
+    SDL_Surface *lineCounterSurface = TTF_RenderUTF8_Blended(te->font, lineCounterBuffer, (SDL_Color) {255, 255, 0, 255});
     SDL_Texture *lineCounterTexture = SDL_CreateTextureFromSurface(te->renderer, lineCounterSurface);
     SDL_FRect lineCounterRect =
     {
