@@ -547,7 +547,6 @@ void textEngineAppendLine(struct TextEngine* te)
     }
     if (te->currentLine->prev->indentationDepth > 0)
     {
-        printf("%d\n", te->currentLine->prev->indentationDepth);
         for (int i = 0; i < te->currentLine->prev->indentationDepth; i++)
         {
             textEngineAppendString(te, " ");
@@ -776,31 +775,16 @@ void textEngineReadFile(struct TextEngine *te, char *fileName)
         if (b[i] == '\0')
         {
             textEngineAppendString(te, b);
-            int spaces = 0;
-            char *temp = b;
-            while (*temp == ' ')
-            {
-                spaces++;
-                temp++;
-            }
-            te->currentLine->indentationDepth = spaces;
             break;
         }
         if (b[i] == '\n')
         {
             b[i++] = '\0';
             textEngineAppendString(te, b);
-            // calculate indentation
-            int spaces = 0;
-            char *temp = b;
-            while (*temp == ' ')
-            {
-                spaces++;
-                temp++;
-            }
+            unsigned int indentationCache = te->currentLine->indentationDepth;
+            te->currentLine->indentationDepth = 0;
             textEngineAppendLine(te);
-            te->currentLine->prev->indentationDepth = spaces;
-            // reset depth to recalculate later
+            te->currentLine->prev->indentationDepth = indentationCache;
             b += i;
             acc += i;
             i = 0;
