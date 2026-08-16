@@ -399,7 +399,8 @@ void textEngineHandleEvents(struct TextEngine *te)
                     textEngineAppendString(te, " ");
                     textEngineAppendString(te, " ");
                     textEngineAppendString(te, " ");
-                    te->currentLine->indentationDepth++;
+                    te->currentLine->indentationDepth += 4;
+                    cursorResetBlinkState(te);
                     break;
                 case SDLK_DOWN:
                     cursorMoveDown(te);
@@ -545,9 +546,6 @@ void textEngineAppendLine(struct TextEngine* te)
     {
         for (int i = 0; i < te->currentLine->indentationDepth; i++)
         {
-            textEngineAppendString(te, " ");
-            textEngineAppendString(te, " ");
-            textEngineAppendString(te, " ");
             textEngineAppendString(te, " ");
         }
     }
@@ -716,12 +714,15 @@ void textEnginePopCharUTF8(struct TextEngine *te)
         }
         else
         {
+            if (te->currentLine->sb->tail->c == ' ')
+                te->currentLine->indentationDepth--;
             stringBuilderPopUTF8(te->currentLine->sb);
         }
         te->cursor.currentNode = te->currentLine->sb->tail;
     }
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
+    cursorResetBlinkState(te);
     return;
 }
 
@@ -764,13 +765,31 @@ void textEngineReadFile(struct TextEngine *te, char *fileName)
         if (b[i] == '\0')
         {
             textEngineAppendString(te, b);
+            int spaces = 0;
+            char *temp = b;
+            while (*temp == ' ')
+            {
+                spaces++;
+                temp++;
+            }
+            te->currentLine->indentationDepth = spaces / 4;
             break;
         }
         if (b[i] == '\n')
         {
             b[i++] = '\0';
             textEngineAppendString(te, b);
+            // calculate indentation
+            int spaces = 0;
+            char *temp = b;
+            while (*temp == ' ')
+            {
+                spaces++;
+                temp++;
+            }
             textEngineAppendLine(te);
+            te->currentLine->prev->indentationDepth = spaces / 4;
+            // reset depth to recalculate later
             b += i;
             acc += i;
             i = 0;
