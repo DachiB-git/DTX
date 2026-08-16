@@ -8,7 +8,7 @@
 #include <SDL_ttf.h>
 
 #define IN_OUT_BUFFER_SIZE 512
-#define isUTF8ContByte(c) ((c & 0xC0) == 0x80) 
+#define isUTF8ContByte(c) ((c & 0xC0) == 0x80)
 #define SDLColorToInt(c) ((c.r << 24) | (c.g << 16) | (c.b << 8) | c.a)
 
 struct Cursor

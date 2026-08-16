@@ -243,6 +243,7 @@ int stringBuilderAppendString(struct TextEngine *te, struct StringBuilder *sb, c
 {
     while(*s)
     {
+        if (sb->size >= IN_OUT_BUFFER_SIZE - 1) break;
         if (stringBuilderAppend(sb, *s) != 0) return 1;
         if (*s == ' ' && sb->tail->prev == te->currentLine->indentationEnd)
         {
