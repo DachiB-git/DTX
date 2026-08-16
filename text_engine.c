@@ -435,6 +435,8 @@ void textEngineHandleEvents(struct TextEngine *te)
                             te->font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
                             te->lineHeight = (float) TTF_FontLineSkip(te->font) / te->renderScale;
                             SDL_FlushEvent(SDL_TEXTINPUT);
+                            SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
+                            SDL_RenderClear(te->renderer);
                             textEngineRecalculateLines(te);
                         }
                     }
