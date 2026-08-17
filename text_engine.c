@@ -610,7 +610,7 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
     line->shouldRerender = 0;
     if (line->sb->size != 0)
     {
-        SDL_Surface *textSurface = TTF_RenderUTF8_Blended_Wrapped(te->font, te->buffer, te->textColor, 0);
+        SDL_Surface *textSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, te->textColor);
         SDL_Texture *textTexture = SDL_CreateTextureFromSurface(te->renderer, textSurface);
         SDL_FRect textRect = 
         {
