@@ -66,6 +66,7 @@ void cursorMoveUp(struct TextEngine *te)
         te->currentLine = te->currentLine->prev;
         te->cursor.currentNode = te->currentLine->sb->tail;
     }
+    te->currentLine->shouldRerender = 1;
     cursorResetBlinkState(te);
     return;
 }
@@ -79,6 +80,7 @@ void cursorMoveDown(struct TextEngine *te)
     if (te->currentLine != te->last)
         te->currentLine = te->currentLine->next;
     te->cursor.currentNode = te->currentLine->sb->tail;
+    te->currentLine->shouldRerender = 1;
     cursorResetBlinkState(te);
     return;
 }
@@ -99,6 +101,7 @@ void cursorMoveLeft(struct TextEngine *te)
     {
         te->cursor.currentNode = cursorSeekPrevCodePoint(te);
     }
+    te->currentLine->shouldRerender = 1;
     cursorResetBlinkState(te);
     return;
 }
@@ -119,6 +122,7 @@ void cursorMoveRight(struct TextEngine *te)
     {
         te->cursor.currentNode = cursorSeekNextCodePoint(te);
     }
+    te->currentLine->shouldRerender = 1;
     cursorResetBlinkState(te);
     return;
 }
@@ -608,6 +612,12 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
     SDL_DestroyTexture(lineCounterTexture);
     stringBuilderToString(line->sb, te->buffer, IN_OUT_BUFFER_SIZE);
     line->shouldRerender = 0;
+    if (line == te->currentLine)
+        {
+            SDL_FRect highlightRect = {line->offsetX, line->offsetY, (float) te->renderWidth, te->lineHeight};
+            SDL_SetRenderDrawColor(te->renderer, 31, 31, 31, 255);
+            SDL_RenderFillRectF(te->renderer, &highlightRect);
+        }
     if (line->sb->size != 0)
     {
         SDL_Surface *textSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, te->textColor);
