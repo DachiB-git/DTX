@@ -632,6 +632,40 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
     return;
 }
 
+void textEngineRenderStatusBar(struct TextEngine *te)
+{
+    // find the bottom of the screen
+    // reserve 1 lineHeight of space
+    // render a UI box there
+    // shows number of lines, characters, cursor location,
+    // file status as: UNMODIFIED | MODIFIED | SAVING
+    float statusBarOffsetY = (float) te->renderHeight - te->lineHeight;
+    printf("%f\n", statusBarOffsetY);
+    SDL_FRect statusBarRect = 
+    {
+        0,
+        statusBarOffsetY,
+        (float) te->renderWidth,
+        te->lineHeight
+    };
+    SDL_SetRenderDrawColor(te->renderer, 255, 255, 0, 255);
+    SDL_RenderFillRectF(te->renderer, &statusBarRect);
+    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, "Lines: %d | Status: MODIFIED", te->lines);
+    SDL_Surface *statusBarSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, (SDL_Color) {9, 0, 0, 255});
+    SDL_Texture *statusBarTexture = SDL_CreateTextureFromSurface(te->renderer, statusBarSurface);
+    SDL_FRect statusBarTextRect =
+    {
+        0,
+        statusBarOffsetY,
+        (float) statusBarSurface->w / te->renderScale,
+        (float) statusBarSurface->h / te->renderScale
+    };
+    SDL_RenderCopyF(te->renderer, statusBarTexture, NULL, &statusBarTextRect);
+    SDL_DestroyTexture(statusBarTexture);
+    SDL_FreeSurface(statusBarSurface);
+    return;
+}
+
 void textEnginePopCharUTF8(struct TextEngine *te)
 {
     if (te == NULL) return;
