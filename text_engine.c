@@ -886,7 +886,7 @@ void textEngineWriteFile(struct TextEngine *te)
     fflush(outputFile);
     fclose(outputFile);
 #ifdef _WIN32
-    remove(fileName);
+    remove(te->fileName);
 #endif
     rename("text.tmp", te->fileName);
     te->fileIsNotSaved = 0;
