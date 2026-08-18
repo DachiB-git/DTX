@@ -299,7 +299,7 @@ struct Line* getLine(struct TextEngine *te, struct Line *next, struct Line *prev
     return line;
 }
 
-struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor)
+struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor)
 {
     struct TextEngine* te = malloc(sizeof(*te));
     if (te == NULL)
@@ -311,6 +311,7 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
     te->windowWidth = windowWidth;
     te->windowHeight = windowHeight;
     te->fontSize = fontSize;
+    te->fileName = fileName;
     SDL_SetHint(SDL_HINT_WINDOWS_DPI_SCALING, "1");
     if (SDL_Init(SDL_INIT_EVERYTHING))
     {
@@ -373,6 +374,7 @@ struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontF
     te->cursor.offsetY = 0;
     te->cursor.width = 2.0;
     te->isRunning = 1;
+    te->fileIsNotSaved = 0;
     SDL_ShowWindow(te->window);
     return te;
 }
@@ -478,6 +480,12 @@ void textEngineHandleEvents(struct TextEngine *te)
                         }
                     }
                     break;
+                case SDLK_s:
+                    if (event.key.keysym.mod & KMOD_CTRL && te->fileIsNotSaved)
+                    {
+                        te->fileIsNotSaved = 0;
+                        textEngineWriteFile(te);
+                    }
                 default:
                     break;
             }
@@ -492,6 +500,7 @@ void textEngineAppendLine(struct TextEngine* te)
 {
     if (te == NULL) return;
     struct Line *line;
+    te->fileIsNotSaved = 1;
     if (te->lines == 0)
     {
         line = getLine(te, NULL, NULL);
@@ -647,10 +656,8 @@ void textEngineRenderStatusBar(struct TextEngine *te)
     // find the bottom of the screen
     // reserve 1 lineHeight of space
     // render a UI box there
-    // shows number of lines, characters, cursor location,
-    // file status as: UNMODIFIED | MODIFIED | SAVING
+    // shows number of lines, characters, cursor location
     float statusBarOffsetY = (float) te->renderHeight - te->lineHeight;
-    printf("%f\n", statusBarOffsetY);
     SDL_FRect statusBarRect = 
     {
         0,
@@ -660,7 +667,7 @@ void textEngineRenderStatusBar(struct TextEngine *te)
     };
     SDL_SetRenderDrawColor(te->renderer, 255, 255, 0, 255);
     SDL_RenderFillRectF(te->renderer, &statusBarRect);
-    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, "Lines: %d | Status: MODIFIED", te->lines);
+    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, " Lines: %d ", te->lines);
     SDL_Surface *statusBarSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, (SDL_Color) {9, 0, 0, 255});
     SDL_Texture *statusBarTexture = SDL_CreateTextureFromSurface(te->renderer, statusBarSurface);
     SDL_FRect statusBarTextRect =
@@ -668,8 +675,24 @@ void textEngineRenderStatusBar(struct TextEngine *te)
         0,
         statusBarOffsetY,
         (float) statusBarSurface->w / te->renderScale,
-        (float) statusBarSurface->h / te->renderScale
+        te->lineHeight
     };
+    SDL_FRect statusBarFileStatusRect =
+    {
+        statusBarTextRect.w,
+        statusBarOffsetY,
+        (float) te->renderWidth,
+        te->lineHeight
+    };
+    if (te->fileIsNotSaved)
+    {
+        SDL_SetRenderDrawColor(te->renderer, 255, 0, 0, 255);
+    }
+    else
+    {
+        SDL_SetRenderDrawColor(te->renderer, 255, 255, 0, 255);
+    }
+    SDL_RenderFillRectF(te->renderer, &statusBarFileStatusRect);
     SDL_RenderCopyF(te->renderer, statusBarTexture, NULL, &statusBarTextRect);
     SDL_DestroyTexture(statusBarTexture);
     SDL_FreeSurface(statusBarSurface);
@@ -679,6 +702,7 @@ void textEngineRenderStatusBar(struct TextEngine *te)
 void textEnginePopCharUTF8(struct TextEngine *te)
 {
     if (te == NULL) return;
+    te->fileIsNotSaved = 1;
     // cursor is anywhere but at the end of the line
     if (te->cursor.currentNode != te->currentLine->sb->tail)
     {
@@ -793,15 +817,15 @@ void textEngineAppendChar(struct TextEngine *te, char c)
     return;
 }
 
-void textEngineReadFile(struct TextEngine *te, char *fileName)
+void textEngineReadFile(struct TextEngine *te)
 {
-    FILE *fh = fopen(fileName, "r");
+    FILE *fh = fopen(te->fileName, "r");
     if (fh == NULL)
     {
         // file not found, try creating it
-        fh = fopen(fileName, "w");
+        fh = fopen(te->fileName, "w");
     }
-    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, "DTX | %s", fileName);
+    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, "DTX | %s", te->fileName);
     SDL_SetWindowTitle(te->window, te->buffer);
     // make sure to always have at least a single line ready
     textEngineAppendLine(te);
@@ -839,10 +863,11 @@ void textEngineReadFile(struct TextEngine *te, char *fileName)
         }
         i++;
     }
+    te->fileIsNotSaved = 0;
     return;
 }
 
-void textEngineWriteFile(struct TextEngine *te, char *fileName)
+void textEngineWriteFile(struct TextEngine *te)
 {
     FILE* outputFile = fopen("text.tmp", "w");
     struct Line *line = te->first;
@@ -863,12 +888,14 @@ void textEngineWriteFile(struct TextEngine *te, char *fileName)
 #ifdef _WIN32
     remove(fileName);
 #endif
-    rename("text.tmp", fileName);
+    rename("text.tmp", te->fileName);
+    te->fileIsNotSaved = 0;
 }
 
 void textEngineAppendString(struct TextEngine *te, char *s)
 {
     if (te == NULL) return;
+    te->fileIsNotSaved = 1;
     if (te->cursor.currentNode != te->currentLine->sb->tail)
     {
         struct Node *rest;

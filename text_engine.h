@@ -11,6 +11,13 @@
 #define isUTF8ContByte(c) ((c & 0xC0) == 0x80)
 #define SDLColorToInt(c) ((c.r << 24) | (c.g << 16) | (c.b << 8) | c.a)
 
+// enum FILE_STATUS_CODE
+// {
+//     UNMODIFIED = 0,
+//     UNSAVED,
+//     SAVING,
+// };
+
 struct Cursor
 {
     struct Node *currentNode;
@@ -68,11 +75,14 @@ struct TextEngine
     SDL_Color textColor;
     SDL_Color bgColor;
     struct Cursor cursor;
+    char *fileName;
+    unsigned int fileIsNotSaved;
     unsigned int lines;
     unsigned int isRunning;
     unsigned int frameStart;
     unsigned int shouldRerenderLines;
     unsigned int shouldRerenderCursor;
+    unsigned int shouldRerenderStatusBar;
     struct Line *currentLine;
     struct Line *first;
     struct Line *last;
@@ -101,11 +111,11 @@ void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int 
 unsigned int stringBuilderCalculateSize(struct StringBuilder *sb);
 void stringBuilderCleanUp(struct StringBuilder *sb);
 
-struct TextEngine* textEngineInit(int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor);
+struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor);
 void textEngineHandleEvents(struct TextEngine *te);
 char* textEngineGetResourcePath(char *fileName);
-void textEngineReadFile(struct TextEngine *te, char *fileName);
-void textEngineWriteFile(struct TextEngine *te, char *fileName);
+void textEngineReadFile(struct TextEngine *te);
+void textEngineWriteFile(struct TextEngine *te);
 void textEngineAppendChar(struct TextEngine *te, char c);
 void textEngineAppendLine(struct TextEngine* te);
 void textEngineAppendString(struct TextEngine *te, char *s);
