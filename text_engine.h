@@ -7,7 +7,7 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
-#define IN_OUT_BUFFER_SIZE 512
+#define IN_OUT_BUFFER_SIZE 2048
 #define isUTF8ContByte(c) ((c & 0xC0) == 0x80)
 #define SDLColorToInt(c) ((c.r << 24) | (c.g << 16) | (c.b << 8) | c.a)
 
@@ -115,6 +115,7 @@ void textEnginePollCursorBlinkTimer(struct TextEngine *te);
 void textEngineRenderCursor(struct TextEngine *te);
 void textEngineClearLine(struct TextEngine *te, struct Line *line);
 void textEngineRenderLine(struct TextEngine *te, struct Line *line);
+void textEngineRenderStatusBar(struct TextEngine *te);
 void textEngineRerenderLines(struct TextEngine *te);
 void textEngineRecalculateLines(struct TextEngine *te);
 void textEngineCleanUp(struct TextEngine *te);

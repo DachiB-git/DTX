@@ -21,6 +21,7 @@ int main(int argc, char *argv[])
         {
             textEngineRerenderLines(te);
             textEngineRenderCursor(te);
+            textEngineRenderStatusBar(te);
             SDL_RenderPresent(te->renderer);
         }
         float frameTime = (SDL_GetTicks() - te->frameStart) / 1000.0;
