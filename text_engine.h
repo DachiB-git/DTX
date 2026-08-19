@@ -71,7 +71,8 @@ struct TextEngine
     int windowHeight;
     int renderWidth;
     int renderHeight;
-    float lineHeight;
+    int lineHeight;
+    float halfLeading;
     SDL_Color textColor;
     SDL_Color bgColor;
     struct Cursor cursor;
@@ -126,7 +127,7 @@ void textEngineRenderCursor(struct TextEngine *te);
 void textEngineClearLine(struct TextEngine *te, struct Line *line);
 void textEngineRenderLine(struct TextEngine *te, struct Line *line);
 void textEngineRenderStatusBar(struct TextEngine *te);
-void textEngineRerenderLines(struct TextEngine *te);
+void textEngineRenderLines(struct TextEngine *te);
 void textEngineRecalculateLines(struct TextEngine *te);
 void textEngineCleanUp(struct TextEngine *te);
 

@@ -364,7 +364,8 @@ struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHei
         return NULL;
     }
     TTF_SetFontHinting(te->font, TTF_HINTING_LIGHT_SUBPIXEL);
-    te->lineHeight = (float) TTF_FontLineSkip(te->font) / te->renderScale;
+    te->lineHeight = (int) ((TTF_FontHeight(te->font) / te->renderScale) * 1.2);
+    te->halfLeading = (float) (te->lineHeight - (int) (TTF_FontHeight(te->font) / te->renderScale)) / 2.0;
     te->lines = 0;
     te->cursor.blinkStart = SDL_GetTicks();
     te->cursor.blinkIntervalMillis = 500;
@@ -540,7 +541,6 @@ void textEngineAppendLine(struct TextEngine* te)
             te->currentLine->sb->tail->next = NULL;
             te->currentLine->sb->size -= line->sb->size;
         }
-        // textEngineRenderLine(te, te->currentLine);
         line->shouldRerender = 1;
         te->shouldRerenderLines = 1;
     }
@@ -612,7 +612,7 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
     SDL_FRect lineCounterRect =
     {
         0,
-        line->offsetY,
+        line->offsetY + te->halfLeading,
         (float) lineCounterSurface->w / te->renderScale,
         (float) lineCounterSurface->h / te->renderScale
     };
@@ -634,10 +634,10 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
         SDL_FRect textRect = 
         {
             line->offsetX, 
-            line->offsetY, 
+            line->offsetY + te->halfLeading, 
             (float) textSurface->w / te->renderScale, 
             (float) textSurface->h / te->renderScale
-        }; 
+        };
         line->width = textRect.w;
         line->height = textRect.h;
         SDL_FreeSurface(textSurface);
@@ -657,7 +657,7 @@ void textEngineRenderStatusBar(struct TextEngine *te)
     // reserve 1 lineHeight of space
     // render a UI box there
     // shows number of lines, characters, cursor location
-    float statusBarOffsetY = (float) te->renderHeight - te->lineHeight;
+    float statusBarOffsetY = (float) te->renderHeight / te->renderScale - te->lineHeight;
     SDL_FRect statusBarRect = 
     {
         0,
@@ -668,14 +668,14 @@ void textEngineRenderStatusBar(struct TextEngine *te)
     SDL_SetRenderDrawColor(te->renderer, 255, 255, 0, 255);
     SDL_RenderFillRectF(te->renderer, &statusBarRect);
     snprintf(te->buffer, IN_OUT_BUFFER_SIZE, " Lines: %d ", te->lines);
-    SDL_Surface *statusBarSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, (SDL_Color) {9, 0, 0, 255});
+    SDL_Surface *statusBarSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, (SDL_Color) {0, 0, 0, 255});
     SDL_Texture *statusBarTexture = SDL_CreateTextureFromSurface(te->renderer, statusBarSurface);
     SDL_FRect statusBarTextRect =
     {
         0,
-        statusBarOffsetY,
+        statusBarOffsetY + te->halfLeading,
         (float) statusBarSurface->w / te->renderScale,
-        te->lineHeight
+        (float) statusBarSurface->h / te->renderScale
     };
     SDL_FRect statusBarFileStatusRect =
     {
@@ -967,7 +967,6 @@ void textEngineRenderCursor(struct TextEngine *te)
     };
     if (te->cursor.blinkState == SDLColorToInt(te->bgColor))
     {
-        // textEngineRenderLine(te, te->currentLine);
         te->currentLine->shouldRerender = 1;
         te->shouldRerenderLines = 1;
     }
@@ -993,7 +992,7 @@ void textEngineRenderCursor(struct TextEngine *te)
     return;
 }
 
-void textEngineRerenderLines(struct TextEngine *te)
+void textEngineRenderLines(struct TextEngine *te)
 {
     if (te == NULL) return;
     struct Line *line = te->first;

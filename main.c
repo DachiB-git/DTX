@@ -8,7 +8,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     // TODO: fix cursor background blink mask with colors other than black and white
-    struct TextEngine *te = textEngineInit(argv[1], 800, 600, "Courier Prime.ttf", 16, (SDL_Color) {255, 255, 255, 255}, (SDL_Color) {0, 0, 0, 255});
+    struct TextEngine *te = textEngineInit(argv[1], 800, 600, "BasicallyAMono-Regular.ttf", 16, (SDL_Color) {255, 255, 255, 255}, (SDL_Color) {0, 0, 0, 255});
     if (te == NULL) return 1;
     textEngineReadFile(te);
     while (te->isRunning)
@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
         // only force rerender if the text buffer gets updated or cursor state changes
         if (te->shouldRerenderLines || te->shouldRerenderCursor)
         {
-            textEngineRerenderLines(te);
+            textEngineRenderLines(te);
             textEngineRenderCursor(te);
             textEngineRenderStatusBar(te);
             SDL_RenderPresent(te->renderer);
