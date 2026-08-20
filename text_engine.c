@@ -450,7 +450,8 @@ void textEngineHandleEvents(struct TextEngine *te)
                             TTF_CloseFont(te->font);
                             te->font = font;
                             te->font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
-                            te->lineHeight = (float) TTF_FontLineSkip(te->font) / te->renderScale;
+                            te->lineHeight = (int) ((TTF_FontHeight(te->font) / te->renderScale) * 1.2);
+                            te->halfLeading = (float) (te->lineHeight - (int) (TTF_FontHeight(te->font) / te->renderScale)) / 2.0;
                             SDL_FlushEvent(SDL_TEXTINPUT);
                             SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
                             SDL_RenderClear(te->renderer);
@@ -473,7 +474,8 @@ void textEngineHandleEvents(struct TextEngine *te)
                             TTF_CloseFont(te->font);
                             te->font = font;
                             te->font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
-                            te->lineHeight = (float) TTF_FontLineSkip(te->font) / te->renderScale;
+                            te->lineHeight = (int) ((TTF_FontHeight(te->font) / te->renderScale) * 1.2);
+                            te->halfLeading = (float) (te->lineHeight - (int) (TTF_FontHeight(te->font) / te->renderScale)) / 2.0;
                             SDL_FlushEvent(SDL_TEXTINPUT);
                             SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
                             SDL_RenderClear(te->renderer);

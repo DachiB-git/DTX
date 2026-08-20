@@ -25,6 +25,7 @@ int main(int argc, char *argv[])
             SDL_RenderPresent(te->renderer);
         }
         float frameTime = (SDL_GetTicks() - te->frameStart) / 1000.0;
+        printf("FPS: %.2f\n", 1000.0 / (16.66f - frameTime));
         SDL_Delay(SDL_floor(16.66f - frameTime));
     }
     textEngineCleanUp(te);
