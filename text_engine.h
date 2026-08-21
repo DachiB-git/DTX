@@ -24,6 +24,7 @@ struct Cursor
     float offsetX;
     float offsetY;
     float width;
+    unsigned int scrollIsActive;
     unsigned int blinkStart;
     unsigned int blinkState;
     unsigned int blinkIntervalMillis;
@@ -84,9 +85,12 @@ struct TextEngine
     unsigned int shouldRerenderLines;
     unsigned int shouldRerenderCursor;
     unsigned int shouldRerenderStatusBar;
+    float autoScrollRatio;
     struct Line *currentLine;
     struct Line *first;
     struct Line *last;
+    struct Line *frameFirst;
+    struct Line *frameLast;
 };
 
 struct Node* cursorSeekNextCodePoint(struct TextEngine *te);
@@ -118,7 +122,7 @@ char* textEngineGetResourcePath(char *fileName);
 void textEngineReadFile(struct TextEngine *te);
 void textEngineWriteFile(struct TextEngine *te);
 void textEngineAppendChar(struct TextEngine *te, char c);
-void textEngineAppendLine(struct TextEngine* te);
+void textEngineAppendLine(struct TextEngine *te);
 void textEngineAppendString(struct TextEngine *te, char *s);
 void textEnginePopCharUTF8(struct TextEngine *te);
 void textEnginePopLine(struct TextEngine *te);
@@ -129,6 +133,7 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line);
 void textEngineRenderStatusBar(struct TextEngine *te);
 void textEngineRenderLines(struct TextEngine *te);
 void textEngineRecalculateLines(struct TextEngine *te);
+void textEngineUpdateFrameState(struct TextEngine *te);
 void textEngineCleanUp(struct TextEngine *te);
 
 #endif

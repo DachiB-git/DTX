@@ -67,6 +67,18 @@ void cursorMoveUp(struct TextEngine *te)
         te->cursor.currentNode = te->currentLine->sb->tail;
     }
     te->currentLine->shouldRerender = 1;
+    if (te->currentLine->offsetY <= SDL_roundf((float) (te->windowHeight - te->lineHeight) * (1.0 - te->autoScrollRatio)) && te->frameFirst != te->first)
+    {
+        te->frameFirst = te->frameFirst->prev;
+        if (te->frameLast->offsetY >= SDL_roundf((float) (te->windowHeight - te->lineHeight * 2)))
+        {
+            te->frameLast = te->frameLast->prev;
+        }
+        SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
+        SDL_RenderClear(te->renderer);
+        textEngineRecalculateLines(te);
+        textEngineUpdateFrameState(te);
+    }
     cursorResetBlinkState(te);
     return;
 }
@@ -81,6 +93,15 @@ void cursorMoveDown(struct TextEngine *te)
         te->currentLine = te->currentLine->next;
     te->cursor.currentNode = te->currentLine->sb->tail;
     te->currentLine->shouldRerender = 1;
+    if (te->cursor.scrollIsActive && te->currentLine->offsetY >= SDL_roundf((float) (te->windowHeight - te->lineHeight) * te->autoScrollRatio) && te->frameLast != te->last)
+    {
+        te->frameFirst = te->frameFirst->next;
+        te->frameLast = te->frameLast->next;
+        SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
+        SDL_RenderClear(te->renderer);
+        textEngineRecalculateLines(te);
+        textEngineUpdateFrameState(te);
+    }
     cursorResetBlinkState(te);
     return;
 }
@@ -93,16 +114,14 @@ void cursorMoveLeft(struct TextEngine *te)
     te->shouldRerenderLines = 1;
     if (te->currentLine->sb->size == 0 || te->cursor.currentNode == NULL)
     {
-        if (te->currentLine->prev == NULL) return;
-        te->currentLine = te->currentLine->prev;
-        te->cursor.currentNode = te->currentLine->sb->tail;
+        cursorMoveUp(te);
     }
     else
     {
         te->cursor.currentNode = cursorSeekPrevCodePoint(te);
+        te->currentLine->shouldRerender = 1;
+        cursorResetBlinkState(te);
     }
-    te->currentLine->shouldRerender = 1;
-    cursorResetBlinkState(te);
     return;
 }
 
@@ -114,16 +133,14 @@ void cursorMoveRight(struct TextEngine *te)
     te->shouldRerenderLines = 1;
     if (te->currentLine->sb->size == 0 || te->cursor.currentNode == te->currentLine->sb->tail)
     {
-        if (te->currentLine->next == NULL) return;
-        te->currentLine = te->currentLine->next;
-        te->cursor.currentNode = NULL;
+        cursorMoveDown(te);
     }
     else
     {
         te->cursor.currentNode = cursorSeekNextCodePoint(te);
+        te->currentLine->shouldRerender = 1;
+        cursorResetBlinkState(te);
     }
-    te->currentLine->shouldRerender = 1;
-    cursorResetBlinkState(te);
     return;
 }
 
@@ -367,6 +384,8 @@ struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHei
     te->lineHeight = (int) ((TTF_FontHeight(te->font) / te->renderScale) * 1.2);
     te->halfLeading = (float) (te->lineHeight - (int) (TTF_FontHeight(te->font) / te->renderScale)) / 2.0;
     te->lines = 0;
+    te->autoScrollRatio = 0.80;
+    te->cursor.scrollIsActive = 0;
     te->cursor.blinkStart = SDL_GetTicks();
     te->cursor.blinkIntervalMillis = 500;
     te->cursor.blinkState = SDLColorToInt(bgColor);
@@ -456,6 +475,7 @@ void textEngineHandleEvents(struct TextEngine *te)
                             SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
                             SDL_RenderClear(te->renderer);
                             textEngineRecalculateLines(te);
+                            textEngineUpdateFrameState(te);
                         }
                     }
                     break;
@@ -480,6 +500,7 @@ void textEngineHandleEvents(struct TextEngine *te)
                             SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
                             SDL_RenderClear(te->renderer);
                             textEngineRecalculateLines(te);
+                            textEngineUpdateFrameState(te);
                         }
                     }
                     break;
@@ -499,7 +520,23 @@ void textEngineHandleEvents(struct TextEngine *te)
     }
 }
 
-void textEngineAppendLine(struct TextEngine* te)
+void textEngineUpdateFrameState(struct TextEngine *te)
+{
+    if (te == NULL) return;
+    int maxVisibleLineNumber = te->windowHeight / te->lineHeight - 2 + te->frameFirst->lineNumber - 1;
+    if (te->last->lineNumber <= maxVisibleLineNumber)
+    {
+        te->frameLast = te->last;
+    }
+    else
+    {
+        te->frameLast = te->frameFirst;
+        while (te->frameLast->lineNumber < maxVisibleLineNumber) te->frameLast = te->frameLast->next;
+    }
+    return;
+} 
+
+void textEngineAppendLine(struct TextEngine *te)
 {
     if (te == NULL) return;
     struct Line *line;
@@ -515,6 +552,8 @@ void textEngineAppendLine(struct TextEngine* te)
         te->cursor.currentNode = NULL;
         te->currentLine->shouldRerender = 1;
         te->shouldRerenderLines = 1;
+        te->frameFirst = te->first;
+        te->frameLast = te->last;
         cursorResetBlinkState(te);
         return;
     }
@@ -552,12 +591,9 @@ void textEngineAppendLine(struct TextEngine* te)
         te->last->next = line;
         line->offsetY = te->last->offsetY + te->lineHeight;
         te->last = line;
-        te->currentLine->shouldRerender = 1;
-        te->currentLine = te->last;
-        te->currentLine->shouldRerender = 1;
+        cursorMoveDown(te);
         te->cursor.currentNode = NULL;
-        cursorResetBlinkState(te);
-        te->shouldRerenderLines = 1;
+        textEngineUpdateFrameState(te);
     }
     else
     {
@@ -567,9 +603,9 @@ void textEngineAppendLine(struct TextEngine* te)
         te->currentLine->next = line;
         line->next = rest;
         rest->prev = line;
-        te->currentLine = line;
         textEngineRecalculateLines(te);
-        cursorResetBlinkState(te);
+        textEngineUpdateFrameState(te);
+        cursorMoveDown(te);
         te->cursor.currentNode = NULL;
     }
     if (te->currentLine->prev->indentationDepth > 0)
@@ -585,12 +621,11 @@ void textEngineAppendLine(struct TextEngine* te)
 void textEnginePopLine(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine == te->first) return;
     te->lines--;
     te->last = te->last->prev;
     lineCleanUp(te->last->next);
     te->last->next = NULL;
-    te->currentLine = te->last;
+    // te->currentLine = te->last;
     return;
 }
 
@@ -704,7 +739,6 @@ void textEngineRenderStatusBar(struct TextEngine *te)
 void textEnginePopCharUTF8(struct TextEngine *te)
 {
     if (te == NULL) return;
-    te->fileIsNotSaved = 1;
     // cursor is anywhere but at the end of the line
     if (te->cursor.currentNode != te->currentLine->sb->tail)
     {
@@ -739,6 +773,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
             struct Line *lastLine = te->last;
             te->last = te->currentLine;
             te->last->next = NULL;
+            cursorMoveUp(te);
             textEnginePopLine(te);
             if (restLines)
             {
@@ -747,6 +782,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
                 te->last = lastLine;
                 textEngineClearLine(te, te->last);
                 textEngineRecalculateLines(te);
+                textEngineUpdateFrameState(te);
             }
             te->cursor.currentNode = oldTail;
         }
@@ -785,16 +821,20 @@ void textEnginePopCharUTF8(struct TextEngine *te)
                 struct Line *oldLast = te->last;
                 te->currentLine->next = NULL;
                 te->last = te->currentLine;
+                cursorMoveUp(te);
                 textEnginePopLine(te);
                 te->currentLine->next = rest;
                 rest->prev = te->currentLine;
                 te->last = oldLast;
                 textEngineRecalculateLines(te);
+                textEngineUpdateFrameState(te);
             }
             else
             {
                 textEngineClearLine(te, te->last);
+                cursorMoveUp(te);
                 textEnginePopLine(te);
+                textEngineUpdateFrameState(te);
             }
         }
         else
@@ -806,6 +846,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
     cursorResetBlinkState(te);
+    te->fileIsNotSaved = 1;
     return;
 }
 
@@ -866,6 +907,12 @@ void textEngineReadFile(struct TextEngine *te)
         i++;
     }
     te->fileIsNotSaved = 0;
+    te->cursor.currentNode = NULL;
+    te->currentLine = te->first;
+    te->frameFirst = te->first;
+    te->cursor.scrollIsActive = 1;
+    textEngineUpdateFrameState(te);
+    // while (te->frameLast->next && te->frameLast->offsetY < (float) (te->windowHeight - te->lineHeight * 2)) te->frameLast = te->frameLast->next;
     return;
 }
 
@@ -997,8 +1044,8 @@ void textEngineRenderCursor(struct TextEngine *te)
 void textEngineRenderLines(struct TextEngine *te)
 {
     if (te == NULL) return;
-    struct Line *line = te->first;
-    while (line)
+    struct Line *line = te->frameFirst;
+    while (line != te->frameLast->next)
     {
         if (line->shouldRerender)
         {
@@ -1013,11 +1060,10 @@ void textEngineRenderLines(struct TextEngine *te)
 void textEngineRecalculateLines(struct TextEngine *te)
 {
     if (te == NULL) return;
-    struct Line *line = te->first;
+    struct Line *line = te->frameFirst;
     line->offsetY = te->lineHeight;
     line->offsetX = te->fontSize * 4;
     line->shouldRerender = 1;
-    line->lineNumber = 1;
     line = line->next;
     while (line)
     {
