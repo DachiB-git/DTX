@@ -1095,6 +1095,7 @@ void textEngineRecalculateLines(struct TextEngine *te)
         line = line->next;
     }
     te->shouldRerenderLines = 1;
+    te->last->lineNumber = te->lines;
     return;
 }
 
