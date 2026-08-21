@@ -879,47 +879,61 @@ void textEngineReadFile(struct TextEngine *te)
     SDL_SetWindowTitle(te->window, te->buffer);
     // make sure to always have at least a single line ready
     textEngineAppendLine(te);
-    int bytes_read = fread(te->buffer, sizeof(char), IN_OUT_BUFFER_SIZE - 1, fh);
-    fclose(fh);
-    te->buffer[bytes_read] = '\0';
-    int i = 0;
-    int acc = 0;
-    int wordSize = 0;
-    char *b = te->buffer;
-    while (acc < bytes_read)
+    int bytes_read = 0; 
+    while (1)
     {
-        // we search for the closes newline
-        // we change the newline to null terminator
-        // we append the string to the engine
-        // we insert a newline
-        // we shift the buffer
-        if (b[i] == '\0')
+        bytes_read = fread(te->buffer, sizeof(char), IN_OUT_BUFFER_SIZE - 1, fh);
+        te->buffer[bytes_read] = '\0';
+        int i = 0;
+        int acc = 0;
+        int wordSize = 0;
+        char *b = te->buffer;
+        while (acc < bytes_read)
         {
-            textEngineAppendString(te, b);
-            break;
+            // we search for the closes newline
+            // we change the newline to null terminator
+            // we append the string to the engine
+            // we insert a newline
+            // we shift the buffer
+            if (b[i] == '\0')
+            {
+                textEngineAppendString(te, b);
+                break;
+            }
+            if (b[i] == '\n')
+            {
+                b[i++] = '\0';
+                textEngineAppendString(te, b);
+                unsigned int indentationCache = te->currentLine->indentationDepth;
+                te->currentLine->indentationDepth = 0;
+                textEngineAppendLine(te);
+                te->currentLine->prev->indentationDepth = indentationCache;
+                b += i;
+                acc += i;
+                i = 0;
+                continue;
+            }
+            i++;
         }
-        if (b[i] == '\n')
+        if (bytes_read != IN_OUT_BUFFER_SIZE)
         {
-            b[i++] = '\0';
-            textEngineAppendString(te, b);
-            unsigned int indentationCache = te->currentLine->indentationDepth;
-            te->currentLine->indentationDepth = 0;
-            textEngineAppendLine(te);
-            te->currentLine->prev->indentationDepth = indentationCache;
-            b += i;
-            acc += i;
-            i = 0;
-            continue;
+            if (feof(fh))
+            {
+                break;
+            }
+            else if (ferror(fh))
+            {
+                fprintf(stderr, "Error reading file %s.", te->fileName);
+            }
         }
-        i++;
     }
+    fclose(fh);
     te->fileIsNotSaved = 0;
     te->cursor.currentNode = NULL;
     te->currentLine = te->first;
     te->frameFirst = te->first;
     te->cursor.scrollIsActive = 1;
     textEngineUpdateFrameState(te);
-    // while (te->frameLast->next && te->frameLast->offsetY < (float) (te->windowHeight - te->lineHeight * 2)) te->frameLast = te->frameLast->next;
     return;
 }
 
