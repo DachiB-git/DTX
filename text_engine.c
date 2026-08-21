@@ -1072,7 +1072,7 @@ void textEngineRecalculateLines(struct TextEngine *te)
     line->offsetX = te->fontSize * 4;
     line->shouldRerender = 1;
     line = line->next;
-    while (line)
+    while (line != te->frameLast->next)
     {
         line->shouldRerender = 1;
         line->offsetX = line->prev->offsetX;
