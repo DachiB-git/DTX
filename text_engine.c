@@ -134,6 +134,7 @@ void cursorMoveRight(struct TextEngine *te)
     if (te->currentLine->sb->size == 0 || te->cursor.currentNode == te->currentLine->sb->tail)
     {
         cursorMoveDown(te);
+        te->cursor.currentNode = NULL;
     }
     else
     {
