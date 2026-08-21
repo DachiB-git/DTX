@@ -533,6 +533,13 @@ void textEngineUpdateFrameState(struct TextEngine *te)
         te->frameLast = te->frameFirst;
         while (te->frameLast->lineNumber < maxVisibleLineNumber) te->frameLast = te->frameLast->next;
     }
+    // cursor out of bounds
+    // reset to last visible line
+    if (te->cursor.scrollIsActive && te->currentLine->lineNumber > te->frameLast->lineNumber)
+    {
+        te->currentLine = te->frameLast;
+        te->cursor.currentNode = te->currentLine->sb->tail;
+    }
     return;
 } 
 
