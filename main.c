@@ -24,9 +24,11 @@ int main(int argc, char *argv[])
             textEngineRenderStatusBar(te);
             SDL_RenderPresent(te->renderer);
         }
-        float frameTime = (SDL_GetTicks() - te->frameStart) / 1000.0;
-        // printf("FrameTime(millis): %f | FPS: %.2f\n", frameTime * 1000.0, 1000.0 / (16.66f - frameTime));
-        SDL_Delay(SDL_floor(16.66f - frameTime));
+        unsigned int frameTime = (SDL_GetTicks() - te->frameStart);
+        if ((float) frameTime < 16.66f)
+        {
+            SDL_Delay(16.66f - (float) frameTime);
+        }
     }
     textEngineCleanUp(te);
     return 0;
