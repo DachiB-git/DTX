@@ -632,7 +632,6 @@ void textEnginePopLine(struct TextEngine *te)
     te->last = te->last->prev;
     lineCleanUp(te->last->next);
     te->last->next = NULL;
-    // te->currentLine = te->last;
     return;
 }
 
@@ -828,6 +827,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
                 struct Line *oldLast = te->last;
                 te->currentLine->next = NULL;
                 te->last = te->currentLine;
+                te->frameLast = te->last;
                 cursorMoveUp(te);
                 textEnginePopLine(te);
                 te->currentLine->next = rest;
@@ -923,7 +923,8 @@ void textEngineReadFile(struct TextEngine *te)
             }
             else if (ferror(fh))
             {
-                fprintf(stderr, "Error reading file %s.", te->fileName);
+                fprintf(stderr, "Error reading file %s\n", te->fileName);
+                break;
             }
         }
     }
