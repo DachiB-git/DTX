@@ -573,8 +573,8 @@ void textEngineHandleEvents(struct TextEngine *te)
                             SDL_FlushEvent(SDL_TEXTINPUT);
                             SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
                             SDL_RenderClear(te->renderer);
-                            textEngineRecalculateLines(te);
                             textEngineUpdateFrameState(te);
+                            textEngineRecalculateLines(te);
                         }
                     }
                     break;
@@ -607,8 +607,8 @@ void textEngineHandleEvents(struct TextEngine *te)
                             SDL_FlushEvent(SDL_TEXTINPUT);
                             SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
                             SDL_RenderClear(te->renderer);
-                            textEngineRecalculateLines(te);
                             textEngineUpdateFrameState(te);
+                            textEngineRecalculateLines(te);
                         }
                     }
                     break;
