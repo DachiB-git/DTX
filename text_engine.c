@@ -1,45 +1,66 @@
 #include "text_engine.h"
 
-struct Node* cursorSeekPrevCodePoint(struct TextEngine *te)
-{
-    if (te == NULL) return NULL;
-    struct Node *node = te->cursor.currentNode;
-    while (node && isUTF8ContByte(node->c)) node = node->prev;
-    if (node == NULL) return NULL;
-    return node->prev;
-}
+unsigned int allocated_bytes_lines = 0;
+unsigned int allocated_bytes_sbs = 0;
 
-struct Node* cursorSeekNextCodePoint(struct TextEngine *te)
+void cursorSeekPrevCodePoint(struct TextEngine *te)
 {
-    if (te == NULL) return NULL;
-    struct Node *node = te->cursor.currentNode;
-    // empty lines can't show up here, so cursor is at the start
-    if (node == NULL)
+    if (te == NULL) return;
+    if (te->currentLine->sb->gapStart == 0) return;
+    te->cursor.columnNumber--;
+    // transfer cont bytes
+    while (te->currentLine->sb->gapStart > 0 && isUTF8ContByte(te->currentLine->sb->gapBuffer[--te->currentLine->sb->gapStart]))
     {
-        // set node to the first character of the line
-        node = te->currentLine->sb->head;
+        if (!te->cursor.transferIsActive) continue;
+        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapEnd--] = te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart];
+    }
+    // transfer head byte
+    if (te->cursor.transferIsActive)
+    {
+        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapEnd--] = te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart];
     }
     else
-    // cursor is inside the line, either at the last byte of a multibyte utf char
-    // or a single byte code point
-    // so we shift over to reach the next code point
     {
-        node = node->next;
+        te->currentLine->sb->count--;
     }
-    // 0xxxx
-    // 110xx
-    // 1110x
-    // 11110
-    if ((node->c & 0x80) == 0) return node;
-    if ((node->c & 0xE0) == 0xC0) return node->next;
-    if ((node->c & 0xF0) == 0xE0)
+    te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = '\0';
+    return;
+}
+
+void cursorSeekNextCodePoint(struct TextEngine *te)
+{
+    if (te == NULL) return;
+    if (te->currentLine->sb->gapEnd == te->currentLine->sb->capacity - 1) return;
+    te->cursor.columnNumber++;
+    // we are either on a single byte or multi byte lead character
+    // move it over to the left side
+    te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart++] = te->currentLine->sb->gapBuffer[++te->currentLine->sb->gapEnd];
+    // analyze the moved byte to determine the rest of the operations
+    char c = te->currentLine->sb->gapBuffer[te->currentLine->sb->gapEnd];
+    int shifts = 0;
+    // ascii
+    if ((c & 0x80) == 0) return;
+    // two byte
+    else if ((c & 0xE0) == 0xC0)
     {
-        node = node->next;
-        return node->next;
+        shifts = 1;
     }
-    node = node->next;
-    node = node->next;
-    return node->next;
+    // three bytes
+    else if ((c & 0xF0) == 0xE0)
+    {
+        shifts = 2;
+    }
+    // four bytes
+    else
+    {
+        shifts = 3;
+    }
+    for (int i = 0; i < shifts; i++)
+    {
+        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart++] = te->currentLine->sb->gapBuffer[++te->currentLine->sb->gapEnd];
+    }
+    te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = '\0';
+    return;
 }
 
 void cursorResetBlinkState(struct TextEngine *te)
@@ -54,19 +75,20 @@ void cursorResetBlinkState(struct TextEngine *te)
 void cursorMoveUp(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine == te->first && te->cursor.currentNode == NULL) return;
+    if (te->currentLine == te->first && te->cursor.columnNumber == 0) return;
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
     if (te->currentLine == te->first)
     {
-        te->cursor.currentNode = NULL;
+        textEngineShiftGapStart(te);
     }
     else
     {
         te->currentLine = te->currentLine->prev;
-        te->cursor.currentNode = te->currentLine->sb->tail;
+        textEngineShiftGapEnd(te);
+        te->cursor.columnNumber = te->currentLine->sb->count;
+        te->currentLine->shouldRerender = 1;
     }
-    te->currentLine->shouldRerender = 1;
     if (te->currentLine->offsetY <= SDL_roundf((float) (te->windowHeight - te->lineHeight) * (1.0 - te->autoScrollRatio)) && te->frameFirst != te->first)
     {
         te->frameFirst = te->frameFirst->prev;
@@ -86,13 +108,20 @@ void cursorMoveUp(struct TextEngine *te)
 void cursorMoveDown(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine == te->last && te->cursor.currentNode == te->currentLine->sb->tail) return;
+    if (te->currentLine == te->last && te->cursor.columnNumber == te->currentLine->sb->count) return;
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
-    if (te->currentLine != te->last)
+    if (te->currentLine == te->last)
+    {
+        textEngineShiftGapStart(te);
+    }
+    else
+    {
         te->currentLine = te->currentLine->next;
-    te->cursor.currentNode = te->currentLine->sb->tail;
-    te->currentLine->shouldRerender = 1;
+        textEngineShiftGapEnd(te);
+        te->cursor.columnNumber = te->currentLine->sb->count;
+        te->currentLine->shouldRerender = 1;
+    }
     if (te->cursor.scrollIsActive && te->currentLine->offsetY >= SDL_roundf((float) (te->windowHeight - te->lineHeight) * te->autoScrollRatio) && te->frameLast != te->last)
     {
         te->frameFirst = te->frameFirst->next;
@@ -100,7 +129,6 @@ void cursorMoveDown(struct TextEngine *te)
         SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
         SDL_RenderClear(te->renderer);
         textEngineRecalculateLines(te);
-        textEngineUpdateFrameState(te);
     }
     cursorResetBlinkState(te);
     return;
@@ -109,17 +137,16 @@ void cursorMoveDown(struct TextEngine *te)
 void cursorMoveLeft(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine == te->first && te->cursor.currentNode == NULL) return;
+    if (te->currentLine == te->first && te->cursor.columnNumber == 0) return;
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
-    if (te->currentLine->sb->size == 0 || te->cursor.currentNode == NULL)
+    if (te->currentLine->sb->size == 0 || te->cursor.columnNumber == 0)
     {
         cursorMoveUp(te);
     }
     else
     {
-        te->cursor.currentNode = cursorSeekPrevCodePoint(te);
-        te->currentLine->shouldRerender = 1;
+        cursorSeekPrevCodePoint(te);
         cursorResetBlinkState(te);
     }
     return;
@@ -128,18 +155,17 @@ void cursorMoveLeft(struct TextEngine *te)
 void cursorMoveRight(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine == te->last && te->cursor.currentNode == te->currentLine->sb->tail) return;
+    if (te->currentLine == te->last && te->cursor.columnNumber == te->currentLine->sb->count) return;
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
-    if (te->currentLine->sb->size == 0 || te->cursor.currentNode == te->currentLine->sb->tail)
+    if (te->currentLine->sb->size == 0 || te->cursor.columnNumber == te->currentLine->sb->count)
     {
         cursorMoveDown(te);
-        te->cursor.currentNode = NULL;
+        textEngineShiftGapStart(te);
     }
     else
     {
-        te->cursor.currentNode = cursorSeekNextCodePoint(te);
-        te->currentLine->shouldRerender = 1;
+        cursorSeekNextCodePoint(te);
         cursorResetBlinkState(te);
     }
     return;
@@ -147,14 +173,7 @@ void cursorMoveRight(struct TextEngine *te)
 
 float cursorGetOffsetWidth(struct TextEngine *te)
 {
-    struct Node *rest;
-    rest = te->cursor.currentNode->next;
-    te->cursor.currentNode->next = NULL;
-    stringBuilderToString(te->currentLine->sb, te->buffer, IN_OUT_BUFFER_SIZE);
-    te->cursor.currentNode->next = rest;
-    int w, h;
-    TTF_SizeUTF8(te->font, te->buffer, &w, &h);
-    return (float) w / te->renderScale;
+    return ((float) te->charAdvance / te->renderScale) * te->cursor.columnNumber;
 }
 
 void stringBuilderCleanUp(struct StringBuilder *sb)
@@ -188,13 +207,20 @@ struct StringBuilder* stringBuilderInit()
 {
     struct StringBuilder* sb = malloc(sizeof(*sb));
     if (sb == NULL) return sb;
+    allocated_bytes_sbs += sizeof(*sb);
     memset(sb, 0, sizeof(*sb));
+    // size + 1 for null terminator
+    sb->gapBuffer = calloc(GAP_BUFFER_SIZE + 1, sizeof(char));
+    allocated_bytes_sbs += sizeof(char) * GAP_BUFFER_SIZE;
+    sb->capacity = GAP_BUFFER_SIZE;
+    sb->gapEnd = sb->capacity - 1;
     return sb;
 }
 
 struct Node* getNode(char c, struct Node *next, struct Node *prev)
 {
     struct Node* newNode = malloc(sizeof(*newNode));
+    allocated_bytes_sbs += sizeof(*newNode);
     if (newNode == NULL) return newNode;
     newNode->c = c;
     newNode->next = next;
@@ -202,62 +228,77 @@ struct Node* getNode(char c, struct Node *next, struct Node *prev)
     return newNode;
 }
 
-void stringBuilderPop(struct StringBuilder *sb)
-{
-    if (sb == NULL) return;
-    if (sb->size == 0) return;
-    sb->size--;
-    if (sb->head == sb->tail)
-    {
-        free(sb->head);
-        sb->head = NULL;
-        sb->tail = NULL;
-        return;
-    }
-    struct Node* oldTail = sb->tail;
-    sb->tail = sb->tail->prev;
-    sb->tail->next = NULL;
-    free(oldTail);
-    return;
-}
+// void stringBuilderPop(struct StringBuilder *sb)
+// {
+//     if (sb == NULL) return;
+//     if (sb->size == 0) return;
+//     sb->size--;
+//     if (sb->head == sb->tail)
+//     {
+//         free(sb->head);
+//         sb->head = NULL;
+//         sb->tail = NULL;
+//         return;
+//     }
+//     struct Node* oldTail = sb->tail;
+//     sb->tail = sb->tail->prev;
+//     sb->tail->next = NULL;
+//     free(oldTail);
+//     return;
+// }
 
 void stringBuilderPopUTF8(struct TextEngine *te, struct StringBuilder *sb)
 {
     if (sb == NULL) return;
     if (sb->size == 0) return;
-    while (sb->size > 0 && isUTF8ContByte(sb->tail->c)) stringBuilderPop(sb);
-    if (sb->tail->c == ' ' && te->currentLine->indentationEnd == sb->tail)
-    {
-        te->currentLine->indentationDepth--;
-        stringBuilderPop(sb);
-        te->currentLine->indentationEnd = sb->tail;
-    }
-    else
-    {
-        stringBuilderPop(sb);
-    }
+    // while (sb->size > 0 && isUTF8ContByte(sb->tail->c)) stringBuilderPop(sb);
+    // if (sb->tail->c == ' ' && te->currentLine->indentationEnd == sb->tail)
+    // {
+    //     te->currentLine->indentationDepth--;
+    //     stringBuilderPop(sb);
+    //     te->currentLine->indentationEnd = sb->tail;
+    // }
+    // else
+    // {
+    //     stringBuilderPop(sb);
+    // }
     return;
 }
 
 // returns 0 on successful append, 1 on error
 int stringBuilderAppend(struct StringBuilder *sb, char c)
 {
-    struct Node* n;
     sb->size++;
-    if (sb->tail == NULL)
+    sb->gapBuffer[sb->gapStart++] = c;
+    if (!isUTF8ContByte(c)) sb->count++;
+    if (sb->size == sb->capacity)
     {
-        n = getNode(c, NULL, NULL);
-        if (n == NULL) return 1;
-        sb->head = n;
-        sb->tail = n;
+        unsigned int oldCapacity = sb->capacity;
+        sb->capacity <<= 1;
+        sb->gapBuffer = realloc(sb->gapBuffer, sizeof(char) * (sb->capacity + 1));
+        memset(sb->gapBuffer + oldCapacity, 0, sizeof(char) * (oldCapacity + 1));
+        // now there a multiple invariants here to what should happen to the buffer
+        // a. the cursor is at the end      a b * _ _
+        // A: no need to transfer anything since the right side of the gap is empty
+        // b. cursor it at the beginning    * _ _ a b
+        // B: after realloc, we need to move the old right side of the gap to the end of the enlarged space
+        // c. cursor is in the middle       a * _ _ b
+        // C: same idea as in B, since cursor being in the middle can be interpreted as sub portion of the buffer with the cursor at the start
+        // so the only time we don't need to transfer is when the cursor is at the end of the line
+        if (sb->gapEnd != oldCapacity - 1)
+        {
+            size_t len = oldCapacity - 1 - sb->gapEnd;
+            unsigned char *src = sb->gapBuffer + sb->gapEnd + 1;
+            sb->gapEnd = sb->capacity - 1 - len;
+            unsigned char *dst = sb->gapBuffer + sb->gapEnd + 1;
+            SDL_memmove(dst, src, len);
+        }
+        else
+        {
+            sb->gapEnd = sb->capacity - 1;
+        }
     }
-    else
-    {
-        n = getNode(c, NULL, sb->tail);
-        if (n == NULL) return 1;
-        sb->tail->next = n;
-        sb->tail = n;
-    }
+    sb->gapBuffer[sb->gapStart] = '\0';
     return 0;
 }
 
@@ -267,46 +308,82 @@ int stringBuilderAppendString(struct TextEngine *te, struct StringBuilder *sb, c
     {
         if (sb->size >= IN_OUT_BUFFER_SIZE - 1) break;
         if (stringBuilderAppend(sb, *s) != 0) return 1;
-        if (*s == ' ' && sb->tail->prev == te->currentLine->indentationEnd)
+        if (sb->gapBuffer[sb->gapStart - 1] == ' ' && te->currentLine->indentationEnd == te->currentLine->sb->gapStart - 1)
         {
-            te->currentLine->indentationEnd = sb->tail;
             te->currentLine->indentationDepth++;
+            te->currentLine->indentationEnd++;
         }
+        te->cursor.columnNumber++;
         s++;
     }
     return 0;
 }
 
-void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int size)
+// Moves all the characters in the current line's gap buffer from the left to the right side.
+void textEngineShiftGapStart(struct TextEngine *te)
 {
-    if (sb == NULL) return;
-    struct Node* n = sb->head;
-    unsigned int count = 0;
-    while (n)
+    if (te->currentLine->sb->gapStart != 0)
     {
-        if (count >= size - 1) break;
-        buffer[count++] = n->c;
-        n = n->next;
+        char *dst = te->currentLine->sb->gapBuffer + te->currentLine->sb->gapEnd - (te->currentLine->sb->gapStart - 1);
+        char *src = te->currentLine->sb->gapBuffer;
+        size_t len = te->currentLine->sb->gapStart;
+        te->currentLine->sb->gapStart = 0;
+        te->currentLine->sb->gapEnd -= len;
+        SDL_memmove(dst, src, len);
+        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = 0;
     }
-    buffer[count] = '\0';
+    te->cursor.columnNumber = 0;
     return;
 }
 
-unsigned int stringBuilderCalculateSize(struct StringBuilder *sb)
+// Moves all the characters in the current line's gap buffer from the right to the left side.
+void  textEngineShiftGapEnd(struct TextEngine *te)
 {
-    struct Node *head = sb->head;
-    unsigned int size = 0;
-    while (head)
+    if (te->currentLine->sb->gapEnd != te->currentLine->sb->capacity - 1)
     {
-        size++;
-        head = head->next;
+        char *dst = te->currentLine->sb->gapBuffer + te->currentLine->sb->gapStart;
+        char *src = te->currentLine->sb->gapBuffer + te->currentLine->sb->gapEnd + 1;
+        size_t len = (te->currentLine->sb->capacity - 1) - te->currentLine->sb->gapEnd;
+        te->currentLine->sb->gapEnd = te->currentLine->sb->capacity - 1;
+        te->currentLine->sb->gapStart += len;
+        SDL_memmove(dst, src, len);
+        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = '\0';
     }
-    return size;
+    te->cursor.columnNumber = te->currentLine->sb->count;
+    return;
 }
+
+// void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int size)
+// {
+//     if (sb == NULL) return;
+//     struct Node* n = sb->head;
+//     unsigned int count = 0;
+//     while (n)
+//     {
+//         if (count >= size - 1) break;
+//         buffer[count++] = n->c;
+//         n = n->next;
+//     }
+//     buffer[count] = '\0';
+//     return;
+// }
+
+// unsigned int stringBuilderCalculateSize(struct StringBuilder *sb)
+// {
+//     struct Node *head = sb->head;
+//     unsigned int size = 0;
+//     while (head)
+//     {
+//         size++;
+//         head = head->next;
+//     }
+//     return size;
+// }
 
 struct Line* getLine(struct TextEngine *te, struct Line *next, struct Line *prev)
 {
     struct Line *line = malloc(sizeof(*line));
+    allocated_bytes_lines += sizeof(*line);
     if (line == NULL) return line;
     memset(line, 0, sizeof(*line));
     line->sb = stringBuilderInit();
@@ -359,7 +436,8 @@ struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHei
         SDL_FreeSurface(iconSurface);
         free(iconPath);
     }
-    te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_ACCELERATED);
+    // te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_ACCELERATED);
+    te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_SOFTWARE);
     if (te->renderer == NULL)
     {
         fprintf(stderr, "Failed to create a renderer: %s\n", SDL_GetError());
@@ -382,17 +460,28 @@ struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHei
         return NULL;
     }
     TTF_SetFontHinting(te->font, TTF_HINTING_LIGHT_SUBPIXEL);
+    // monospace advance same for all chars
+    TTF_GlyphMetrics(te->font, '0', NULL, NULL, NULL, NULL, &te->charAdvance);
+    // prerender character glyphs
+    // printable character range 0x20-0x7E
+    for (unsigned int c = PRINTABLE_GLYPH_RANGE_LOW; c <= PRINTABLE_GLYPH_RANGE_HIGH; c++)
+    {
+        SDL_Surface *charSurface = TTF_RenderGlyph32_Blended(te->font, c, te->textColor);
+        te->glyphs[c].texture = SDL_CreateTextureFromSurface(te->renderer, charSurface);
+        te->glyphs[c].width = charSurface->w;
+        te->glyphs[c].height = charSurface->h;
+        SDL_FreeSurface(charSurface);
+    }
     te->lineHeight = (int) ((TTF_FontHeight(te->font) / te->renderScale) * 1.2);
     te->halfLeading = (float) (te->lineHeight - (int) (TTF_FontHeight(te->font) / te->renderScale)) / 2.0;
     te->lines = 0;
     te->autoScrollRatio = 0.80;
     te->cursor.scrollIsActive = 0;
+    te->cursor.transferIsActive = 1;
     te->cursor.blinkStart = SDL_GetTicks();
     te->cursor.blinkIntervalMillis = 500;
     te->cursor.blinkState = SDLColorToInt(bgColor);
-    te->cursor.currentNode = NULL;
-    te->cursor.offsetX = 0;
-    te->cursor.offsetY = 0;
+    te->cursor.columnNumber = 0;
     te->cursor.width = 2.0;
     te->isRunning = 1;
     te->fileIsNotSaved = 0;
@@ -472,6 +561,15 @@ void textEngineHandleEvents(struct TextEngine *te)
                             te->font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
                             te->lineHeight = (int) ((TTF_FontHeight(te->font) / te->renderScale) * 1.2);
                             te->halfLeading = (float) (te->lineHeight - (int) (TTF_FontHeight(te->font) / te->renderScale)) / 2.0;
+                            TTF_GlyphMetrics(te->font, '0', NULL, NULL, NULL, NULL, &te->charAdvance);
+                            for (char c = PRINTABLE_GLYPH_RANGE_LOW; c <= PRINTABLE_GLYPH_RANGE_HIGH; c++)
+                            {
+                                SDL_Surface *charSurface = TTF_RenderGlyph_Blended(te->font, c, te->textColor);
+                                te->glyphs[c].texture = SDL_CreateTextureFromSurface(te->renderer, charSurface);
+                                te->glyphs[c].width = charSurface->w;
+                                te->glyphs[c].height = charSurface->h;
+                                SDL_FreeSurface(charSurface);
+                            }
                             SDL_FlushEvent(SDL_TEXTINPUT);
                             SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
                             SDL_RenderClear(te->renderer);
@@ -497,6 +595,15 @@ void textEngineHandleEvents(struct TextEngine *te)
                             te->font = TTF_OpenFont(te->fontFilePath, (int) (te->fontSize * te->renderScale));
                             te->lineHeight = (int) ((TTF_FontHeight(te->font) / te->renderScale) * 1.2);
                             te->halfLeading = (float) (te->lineHeight - (int) (TTF_FontHeight(te->font) / te->renderScale)) / 2.0;
+                            TTF_GlyphMetrics(te->font, '0', NULL, NULL, NULL, NULL, &te->charAdvance);
+                            for (char c = PRINTABLE_GLYPH_RANGE_LOW; c <= PRINTABLE_GLYPH_RANGE_HIGH; c++)
+                            {
+                                SDL_Surface *charSurface = TTF_RenderGlyph_Blended(te->font, c, te->textColor);
+                                te->glyphs[c].texture = SDL_CreateTextureFromSurface(te->renderer, charSurface);
+                                te->glyphs[c].width = charSurface->w;
+                                te->glyphs[c].height = charSurface->h;
+                                SDL_FreeSurface(charSurface);
+                            }
                             SDL_FlushEvent(SDL_TEXTINPUT);
                             SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
                             SDL_RenderClear(te->renderer);
@@ -539,7 +646,7 @@ void textEngineUpdateFrameState(struct TextEngine *te)
     if (te->cursor.scrollIsActive && te->currentLine->lineNumber > te->frameLast->lineNumber)
     {
         te->currentLine = te->frameLast;
-        te->cursor.currentNode = te->currentLine->sb->tail;
+        te->cursor.columnNumber = te->currentLine->sb->count;
     }
     return;
 } 
@@ -557,7 +664,7 @@ void textEngineAppendLine(struct TextEngine *te)
         te->first = line;
         te->last = line;
         te->currentLine = line;
-        te->cursor.currentNode = NULL;
+        te->cursor.columnNumber = 0;
         te->currentLine->shouldRerender = 1;
         te->shouldRerenderLines = 1;
         te->frameFirst = te->first;
@@ -568,39 +675,14 @@ void textEngineAppendLine(struct TextEngine *te)
     line = getLine(te, NULL, NULL);
     te->lines++;
     line->lineNumber = te->lines;
-    // cursor is not at the end
-    if (te->cursor.currentNode != te->currentLine->sb->tail)
-    {
-        // cursor is at the beginning
-        line->sb->tail = te->currentLine->sb->tail;
-        // move the whole line
-        if (te->cursor.currentNode == NULL)
-        {
-            line->sb->head = te->currentLine->sb->head;
-            line->sb->size = te->currentLine->sb->size;
-            memset(te->currentLine->sb, 0, sizeof(*(te->currentLine->sb)));
-        }
-        else
-        // move portion of the line
-        {
-            line->sb->head = te->cursor.currentNode->next;
-            line->sb->head->prev = NULL;
-            line->sb->size = stringBuilderCalculateSize(line->sb);
-            te->currentLine->sb->tail = te->cursor.currentNode;
-            te->currentLine->sb->tail->next = NULL;
-            te->currentLine->sb->size -= line->sb->size;
-        }
-        line->shouldRerender = 1;
-        te->shouldRerenderLines = 1;
-    }
+    struct Line *cachedCurrentLine = te->currentLine;
+    unsigned int cachedCursorPos = te->cursor.columnNumber;
     if (te->currentLine == te->last)
     {
         line->prev = te->last;
         te->last->next = line;
         line->offsetY = te->last->offsetY + te->lineHeight;
         te->last = line;
-        cursorMoveDown(te);
-        te->cursor.currentNode = NULL;
         textEngineUpdateFrameState(te);
     }
     else
@@ -613,10 +695,29 @@ void textEngineAppendLine(struct TextEngine *te)
         rest->prev = line;
         textEngineRecalculateLines(te);
         textEngineUpdateFrameState(te);
-        cursorMoveDown(te);
-        te->cursor.currentNode = NULL;
     }
-    if (te->currentLine->prev->indentationDepth > 0)
+    // restore cursor pos
+    te->cursor.columnNumber = cachedCursorPos;
+    // cursor is not at the end
+    if (te->cursor.columnNumber != te->currentLine->sb->count)
+    {
+        te->currentLine = line;
+        te->cursor.columnNumber = te->currentLine->sb->count;
+        textEngineAppendString(te, cachedCurrentLine->sb->gapBuffer + cachedCurrentLine->sb->gapEnd + 1);
+        te->currentLine = cachedCurrentLine;
+        te->cursor.columnNumber = cachedCursorPos;
+        te->currentLine->sb->count -= textEngineCountChars(te->currentLine->sb->gapBuffer + te->currentLine->sb->gapEnd + 1);
+        te->currentLine->sb->size -= te->currentLine->sb->capacity - 1 - te->currentLine->sb->gapEnd;
+        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = '\0';
+        te->currentLine->sb->gapEnd = te->currentLine->sb->capacity - 1;
+        cursorMoveDown(te);
+        textEngineShiftGapStart(te);
+    }
+    else
+    {
+        cursorMoveDown(te);
+    }
+    if (te->currentLine->indentationDepth != te->currentLine->prev->indentationDepth)
     {
         for (int i = 0; i < te->currentLine->prev->indentationDepth; i++)
         {
@@ -626,11 +727,36 @@ void textEngineAppendLine(struct TextEngine *te)
     return;
 }
 
+void textEngineRemoveLine(struct TextEngine *te, struct Line *line)
+{
+    if (te == NULL) return;
+    if (line == NULL) return;
+    if (line == te->first) return;
+    te->lines--;
+    line->prev->next = line->next;
+    textEngineClearLine(te, line);
+    if (line->next)
+    {
+        line->next->prev = line->prev;
+        textEngineClear(te);
+        textEngineRecalculateLines(te);
+    }
+    else
+    {
+        te->last = te->last->prev;
+        textEngineUpdateFrameState(te);
+    }
+    line->next = NULL;
+    lineCleanUp(line);
+    return;
+}
+
 void textEnginePopLine(struct TextEngine *te)
 {
     if (te == NULL) return;
     te->lines--;
     te->last = te->last->prev;
+    textEngineClearLine(te, te->last->next);
     lineCleanUp(te->last->next);
     te->last->next = NULL;
     return;
@@ -644,53 +770,98 @@ void textEngineClearLine(struct TextEngine *te, struct Line *line)
     return;
 }
 
+// Returns the number of packed utf8 characters in the buffer.
+// This functions assumes that the buffer is always a well formed sequence of utf8 bytes.
+unsigned int textEngineCountChars(unsigned char *buffer)
+{
+    unsigned int count = 0;
+    while(*buffer)
+    {
+        if (!isUTF8ContByte(*buffer)) count++;
+        buffer++;
+    }
+    return count;
+}
+
+// Packs utf8 bytes into a single 32 bit integer.
+// This functions assumes that the buffer is always a well formed sequence of utf8 bytes and packed is not null.
+// Returns number of bytes to advance.
+unsigned int textEnginePackUTF8(unsigned char *buffer, unsigned int *packed)
+{
+    unsigned int advance = 0;
+    do
+    {
+        *packed = 0;
+        *packed <<= 8;
+        *packed |= *buffer;
+        buffer++;
+        advance++;
+    }
+    while(*buffer && isUTF8ContByte(*buffer));
+    return advance;
+}
+
 void textEngineRenderLine(struct TextEngine *te, struct Line *line)
 {
-    SDL_FRect oldTextRect = {0, line->offsetY, (float) te->renderWidth, (float) te->lineHeight};
+    // clear current line
+    SDL_FRect rect = {0, line->offsetY, (float) te->windowWidth, (float) te->lineHeight};
     SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
-    SDL_RenderFillRectF(te->renderer, &oldTextRect);
+    SDL_RenderFillRectF(te->renderer, &rect);
+    // calculate and render current line number
     char lineCounterBuffer[16];
-    snprintf(lineCounterBuffer, 16, "%5d", line->lineNumber);
-    SDL_Surface *lineCounterSurface = TTF_RenderUTF8_Blended(te->font, lineCounterBuffer, (SDL_Color) {255, 255, 0, 255});
-    SDL_Texture *lineCounterTexture = SDL_CreateTextureFromSurface(te->renderer, lineCounterSurface);
-    SDL_FRect lineCounterRect =
+    snprintf(lineCounterBuffer, 16, "%4d", line->lineNumber);
+    rect.x = 0;
+    rect.y = line->offsetY + te->halfLeading;
+    for (char *c = lineCounterBuffer; *c != '\0'; c++)
     {
-        0,
-        line->offsetY + te->halfLeading,
-        (float) lineCounterSurface->w / te->renderScale,
-        (float) lineCounterSurface->h / te->renderScale
-    };
-    SDL_FreeSurface(lineCounterSurface);
-    SDL_RenderCopyF(te->renderer, lineCounterTexture, NULL, &lineCounterRect);
-    SDL_DestroyTexture(lineCounterTexture);
-    stringBuilderToString(line->sb, te->buffer, IN_OUT_BUFFER_SIZE);
+        struct Glyph glyph = te->glyphs[*c];
+        rect.w = (float) glyph.width / te->renderScale;
+        rect.h = (float) glyph.height / te->renderScale;
+        SDL_SetTextureColorMod(glyph.texture, 255, 255, 0);
+        SDL_RenderCopyF(te->renderer, glyph.texture, NULL, &rect);
+        SDL_SetTextureColorMod(glyph.texture, 255, 255, 255);
+        rect.x += (float) te->charAdvance / te->renderScale;
+    }
+    // reset flag
     line->shouldRerender = 0;
+    // highlight if on current line
     if (line == te->currentLine)
-        {
-            SDL_FRect highlightRect = {line->offsetX, line->offsetY, (float) te->renderWidth, te->lineHeight};
-            SDL_SetRenderDrawColor(te->renderer, 31, 31, 31, 255);
-            SDL_RenderFillRectF(te->renderer, &highlightRect);
-        }
+    {
+        SDL_FRect highlightRect = {line->offsetX, line->offsetY, (float) te->renderWidth, te->lineHeight};
+        SDL_SetRenderDrawColor(te->renderer, 31, 31, 31, 255);
+        SDL_RenderFillRectF(te->renderer, &highlightRect);
+    }
+    // render text if size > 0
     if (line->sb->size != 0)
     {
-        SDL_Surface *textSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, te->textColor);
-        SDL_Texture *textTexture = SDL_CreateTextureFromSurface(te->renderer, textSurface);
-        SDL_FRect textRect = 
+        struct Glyph charGlyph;
+        unsigned int packed = 0;
+        rect.x = line->offsetX;
+        rect.y = line->offsetY + te->halfLeading;
+        unsigned int i = 0;
+        // a b c _ _
+        // 1 = buffer + 0
+        // 2 = buffer + 1
+        // 3 = buffer + 2
+        while (i < line->sb->gapStart)
         {
-            line->offsetX, 
-            line->offsetY + te->halfLeading, 
-            (float) textSurface->w / te->renderScale, 
-            (float) textSurface->h / te->renderScale
-        };
-        line->width = textRect.w;
-        line->height = textRect.h;
-        SDL_FreeSurface(textSurface);
-        SDL_RenderCopyF(te->renderer, textTexture, NULL, &textRect);
-        SDL_DestroyTexture(textTexture);
-    }
-    else
-    {
-        line->width = 0;
+            i += textEnginePackUTF8(line->sb->gapBuffer + i, &packed);
+            charGlyph = te->glyphs[packed];
+            rect.w = (float) charGlyph.width / te->renderScale;
+            rect.h = (float) charGlyph.height / te->renderScale;
+            SDL_RenderCopyF(te->renderer, charGlyph.texture, NULL, &rect);
+            rect.x += (float) (te->charAdvance) / te->renderScale;
+        }
+        i = line->sb->gapEnd + 1;
+        while (i < line->sb->capacity)
+        {
+            i += textEnginePackUTF8(line->sb->gapBuffer + i, &packed);
+            charGlyph = te->glyphs[packed];
+            rect.w = (float) charGlyph.width / te->renderScale;
+            rect.h = (float) charGlyph.height / te->renderScale;
+            SDL_RenderCopyF(te->renderer, charGlyph.texture, NULL, &rect);
+            rect.x += (float) (te->charAdvance) / te->renderScale;
+        }
     }
     return;
 }
@@ -711,7 +882,7 @@ void textEngineRenderStatusBar(struct TextEngine *te)
     };
     SDL_SetRenderDrawColor(te->renderer, 255, 255, 0, 255);
     SDL_RenderFillRectF(te->renderer, &statusBarRect);
-    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, " Lines: %d ", te->lines);
+    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, " Lines: %d Ln: %d Col: %d", te->lines, te->currentLine->lineNumber, te->cursor.columnNumber);
     SDL_Surface *statusBarSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, (SDL_Color) {0, 0, 0, 255});
     SDL_Texture *statusBarTexture = SDL_CreateTextureFromSurface(te->renderer, statusBarSurface);
     SDL_FRect statusBarTextRect =
@@ -746,110 +917,37 @@ void textEngineRenderStatusBar(struct TextEngine *te)
 void textEnginePopCharUTF8(struct TextEngine *te)
 {
     if (te == NULL) return;
-    // cursor is anywhere but at the end of the line
-    if (te->cursor.currentNode != te->currentLine->sb->tail)
+    if (te->currentLine == te->first && te->cursor.columnNumber == 0) return;
+    // empty line, pop it
+    if (te->currentLine->sb->size == 0)
     {
-        struct Node *rest;
-        struct Node *oldTail;
-        // cursor is at the beginning of the line
-        if (te->cursor.currentNode == NULL)
-        {
-            if (te->currentLine == te->first) return;
-            // if the previous line is empty, just move the current line data
-            if (te->currentLine->prev->sb->size == 0)
-            {
-                te->currentLine->prev->sb->size = te->currentLine->sb->size;
-                te->currentLine->prev->sb->head = te->currentLine->sb->head;
-                te->currentLine->prev->sb->tail = te->currentLine->sb->tail;
-                oldTail = NULL;
-            }
-            else
-            // else chain the two lines together
-            {
-                te->currentLine->prev->sb->tail->next = te->currentLine->sb->head;
-                te->currentLine->sb->head->prev = te->currentLine->prev->sb->tail;
-                oldTail = te->currentLine->prev->sb->tail;
-                te->currentLine->prev->sb->tail = te->currentLine->sb->tail;
-                te->currentLine->prev->sb->size += te->currentLine->sb->size;
-            }                
-            textEngineClearLine(te, te->currentLine);
-            // manual free to preserve nodes
-            free(te->currentLine->sb);
-            te->currentLine->sb = NULL;
-            struct Line *restLines = te->currentLine->next;
-            struct Line *lastLine = te->last;
-            te->last = te->currentLine;
-            te->last->next = NULL;
-            cursorMoveUp(te);
-            textEnginePopLine(te);
-            if (restLines)
-            {
-                te->last->next = restLines;
-                restLines->prev = te->last;
-                te->last = lastLine;
-                textEngineClearLine(te, te->last);
-                textEngineRecalculateLines(te);
-                textEngineUpdateFrameState(te);
-            }
-            te->cursor.currentNode = oldTail;
-        }
-        else
-        {
-            // cursor is inside the line
-            rest = te->cursor.currentNode->next;
-            oldTail = te->currentLine->sb->tail;
-            te->cursor.currentNode->next = NULL;
-            te->currentLine->sb->tail = te->cursor.currentNode;
-            stringBuilderPopUTF8(te, te->currentLine->sb);
-            te->cursor.currentNode = te->currentLine->sb->tail;
-            if (te->cursor.currentNode == NULL)
-            {
-                te->currentLine->sb->head = rest;
-                rest->prev = NULL;
-            }
-            else
-            {
-                te->currentLine->sb->tail->next = rest;
-                rest->prev = te->currentLine->sb->tail;
-            }
-            te->currentLine->sb->tail = oldTail;
-        }
+        cursorMoveUp(te);
+        textEngineRemoveLine(te, te->currentLine->next);
     }
-    // cursor is at the end so just pop from tail
+    // move current line data to the previous one
+    else if (te->cursor.columnNumber == 0)
+    {
+        textEngineShiftGapEnd(te);
+        cursorMoveUp(te);
+        unsigned int oldCursorPosition = te->currentLine->sb->count;
+        textEngineAppendString(te, te->currentLine->next->sb->gapBuffer);
+        for (unsigned int i = te->currentLine->sb->count; i > oldCursorPosition; i--)
+        {
+            cursorMoveLeft(te);
+        }
+        textEngineRemoveLine(te, te->currentLine->next);
+    }
     else
     {
-        if (te->currentLine->sb->size == 0)
+        // delete the character at the cursor
+        te->cursor.transferIsActive = 0;
+        cursorMoveLeft(te);
+        te->cursor.transferIsActive = 1;
+        if (te->currentLine->indentationEnd == te->currentLine->sb->gapStart + 1)
         {
-            if (te->currentLine == te->first) return;
-            if (te->currentLine != te->last)
-            {
-                textEngineClearLine(te, te->last);
-                struct Line *rest = te->currentLine->next;
-                struct Line *oldLast = te->last;
-                te->currentLine->next = NULL;
-                te->last = te->currentLine;
-                te->frameLast = te->last;
-                cursorMoveUp(te);
-                textEnginePopLine(te);
-                te->currentLine->next = rest;
-                rest->prev = te->currentLine;
-                te->last = oldLast;
-                textEngineRecalculateLines(te);
-                textEngineUpdateFrameState(te);
-            }
-            else
-            {
-                textEngineClearLine(te, te->last);
-                cursorMoveUp(te);
-                textEnginePopLine(te);
-                textEngineUpdateFrameState(te);
-            }
+            te->currentLine->indentationDepth--;
+            te->currentLine->indentationEnd--;
         }
-        else
-        {
-            stringBuilderPopUTF8(te, te->currentLine->sb);
-        }
-        te->cursor.currentNode = te->currentLine->sb->tail;
     }
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
@@ -858,15 +956,15 @@ void textEnginePopCharUTF8(struct TextEngine *te)
     return;
 }
 
-void textEngineAppendChar(struct TextEngine *te, char c)
-{
-    if(te == NULL) return;
-    stringBuilderAppend(te->currentLine->sb, c);
-    te->currentLine->shouldRerender = 1;
-    te->shouldRerenderLines = 1;
-    te->cursor.currentNode = te->currentLine->sb->tail;
-    return;
-}
+// void textEngineAppendChar(struct TextEngine *te, char c)
+// {
+//     if(te == NULL) return;
+//     stringBuilderAppend(te->currentLine->sb, c);
+//     te->currentLine->shouldRerender = 1;
+//     te->shouldRerenderLines = 1;
+//     te->cursor.currentNode = te->currentLine->sb->tail;
+//     return;
+// }
 
 void textEngineReadFile(struct TextEngine *te)
 {
@@ -931,10 +1029,10 @@ void textEngineReadFile(struct TextEngine *te)
     }
     fclose(fh);
     te->fileIsNotSaved = 0;
-    te->cursor.currentNode = NULL;
     te->currentLine = te->first;
     te->frameFirst = te->first;
     te->cursor.scrollIsActive = 1;
+    textEngineShiftGapStart(te);
     textEngineUpdateFrameState(te);
     return;
 }
@@ -945,8 +1043,12 @@ void textEngineWriteFile(struct TextEngine *te)
     struct Line *line = te->first;
     while (line)
     {
-        stringBuilderToString(line->sb, te->buffer, IN_OUT_BUFFER_SIZE);
-        if (fputs(te->buffer, outputFile) == EOF)
+        if (fputs(line->sb->gapBuffer, outputFile) == EOF)
+        {
+            fprintf(stderr, "Error while writing to the file.");
+            break;
+        }
+        if (fputs(line->sb->gapBuffer + line->sb->gapEnd + 1, outputFile) == EOF)
         {
             fprintf(stderr, "Error while writing to the file.");
             break;
@@ -968,34 +1070,7 @@ void textEngineAppendString(struct TextEngine *te, char *s)
 {
     if (te == NULL) return;
     te->fileIsNotSaved = 1;
-    if (te->cursor.currentNode != te->currentLine->sb->tail)
-    {
-        struct Node *rest;
-        struct Node *oldTail;
-        oldTail = te->currentLine->sb->tail;
-        if (te->cursor.currentNode != NULL)
-        {
-            rest = te->cursor.currentNode->next;
-            te->cursor.currentNode->next = NULL;
-            te->currentLine->sb->tail = te->cursor.currentNode;
-        }
-        else
-        {
-            rest = te->currentLine->sb->head;
-            te->currentLine->sb->head = NULL;
-            te->currentLine->sb->tail = NULL;
-        }
-        stringBuilderAppendString(te, te->currentLine->sb, s);
-        te->currentLine->sb->tail->next = rest;
-        rest->prev = te->currentLine->sb->tail;
-        te->cursor.currentNode = te->currentLine->sb->tail;
-        te->currentLine->sb->tail = oldTail;
-    }
-    else
-    {
-        stringBuilderAppendString(te, te->currentLine->sb, s);
-        te->cursor.currentNode = te->currentLine->sb->tail;
-    }
+    stringBuilderAppendString(te, te->currentLine->sb, s);
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
     cursorResetBlinkState(te);
@@ -1018,18 +1093,7 @@ void textEngineRenderCursor(struct TextEngine *te)
 {   
     SDL_FRect cursorRect = {0};
     cursorRect.y = te->currentLine->offsetY;
-    cursorRect.x = te->currentLine->offsetX;
-    if (te->cursor.currentNode != NULL)
-    {
-        if (te->cursor.currentNode == te->currentLine->sb->tail)
-        {
-            cursorRect.x += te->currentLine->width;
-        }
-        else
-        {
-            cursorRect.x += cursorGetOffsetWidth(te);
-        }
-    }
+    cursorRect.x = te->currentLine->offsetX + cursorGetOffsetWidth(te);
     cursorRect.w = te->cursor.width;
     cursorRect.h = te->lineHeight;
     if (te->shouldRerenderCursor)
@@ -1051,15 +1115,8 @@ void textEngineRenderCursor(struct TextEngine *te)
             (te->cursor.blinkState >> 8) & 0xFF,                 
             te->cursor.blinkState & 0xFF
         };
-        SDL_Color cachedColor;
-        SDL_GetRenderDrawColor(te->renderer, &cachedColor.r, &cachedColor.g, &cachedColor.b, &cachedColor.a);
-        // update cords
-        te->cursor.offsetX = cursorRect.x;
-        te->cursor.offsetY = cursorRect.y;
-        // render new cursor
         SDL_SetRenderDrawColor(te->renderer, cursorColor.r, cursorColor.g, cursorColor.b, cursorColor.a);
         SDL_RenderFillRectF(te->renderer, &cursorRect);
-        SDL_SetRenderDrawColor(te->renderer, cachedColor.r, cachedColor.b, cachedColor.g, cachedColor.a);
     }
     return;
 }
@@ -1067,6 +1124,7 @@ void textEngineRenderCursor(struct TextEngine *te)
 void textEngineRenderLines(struct TextEngine *te)
 {
     if (te == NULL) return;
+    if (te->shouldRerenderLines == 0) return;
     struct Line *line = te->frameFirst;
     while (line != te->frameLast->next)
     {
@@ -1077,6 +1135,15 @@ void textEngineRenderLines(struct TextEngine *te)
         line = line->next;
     }
     te->shouldRerenderLines = 0;
+    return;
+}
+
+// Clears the screen to the background color.
+// Doesn't call SDL_RenderPresent.
+void textEngineClear(struct TextEngine *te)
+{
+    SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
+    SDL_RenderClear(te->renderer);
     return;
 }
 

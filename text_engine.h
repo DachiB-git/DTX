@@ -8,6 +8,11 @@
 #include <SDL_ttf.h>
 
 #define IN_OUT_BUFFER_SIZE 2048
+#define GAP_BUFFER_SIZE 32
+#define TARGET_FPS 60
+#define TARGET_MILLIS_PER_FRAME (1000 / TARGET_FPS)
+#define PRINTABLE_GLYPH_RANGE_LOW  0x20
+#define PRINTABLE_GLYPH_RANGE_HIGH 0x7E
 #define isUTF8ContByte(c) ((c & 0xC0) == 0x80)
 #define SDLColorToInt(c) ((c.r << 24) | (c.g << 16) | (c.b << 8) | c.a)
 
@@ -18,13 +23,19 @@
 //     SAVING,
 // };
 
+struct Glyph
+{
+    SDL_Texture *texture;
+    int width;
+    int height;
+};
+
 struct Cursor
 {
-    struct Node *currentNode;
-    float offsetX;
-    float offsetY;
     float width;
+    unsigned int columnNumber;
     unsigned int scrollIsActive;
+    unsigned int transferIsActive;
     unsigned int blinkStart;
     unsigned int blinkState;
     unsigned int blinkIntervalMillis;
@@ -39,7 +50,12 @@ struct Node
 
 struct StringBuilder
 {
+    char *gapBuffer;
+    unsigned int gapStart;
+    unsigned int gapEnd;
     unsigned int size;
+    unsigned int count;
+    unsigned int capacity;
     struct Node *head;
     struct Node *tail;
 };
@@ -48,13 +64,17 @@ struct Line
 {
     float offsetX;
     float offsetY;
-    float width;
-    float height;
     unsigned int lineNumber;
     unsigned int indentationDepth;
-    struct Node *indentationEnd;
+    unsigned int indentationEnd;
     unsigned int shouldRerender;
     struct StringBuilder *sb;
+    char *gapBuffer;
+    unsigned int gapStart;
+    unsigned int gapEnd;
+    unsigned int count;
+    unsigned int size;
+    unsigned int capacity;
     struct Line *next;
     struct Line *prev;
 };
@@ -62,12 +82,14 @@ struct Line
 struct TextEngine
 {
     char buffer[IN_OUT_BUFFER_SIZE];
+    struct Glyph glyphs[128];
     SDL_Window *window;
     SDL_Renderer *renderer;
     float renderScale;
     TTF_Font *font;
     char *fontFilePath;
     int fontSize;
+    int charAdvance;
     int windowWidth;
     int windowHeight;
     int renderWidth;
@@ -93,8 +115,8 @@ struct TextEngine
     struct Line *frameLast;
 };
 
-struct Node* cursorSeekNextCodePoint(struct TextEngine *te);
-struct Node* cursorSeekPrevCodePoint(struct TextEngine *te);
+void cursorSeekNextCodePoint(struct TextEngine *te);
+void cursorSeekPrevCodePoint(struct TextEngine *te);
 void cursorMoveUp(struct TextEngine *te);
 void cursorMoveDown(struct TextEngine *te);
 void cursorMoveLeft(struct TextEngine *te);
@@ -102,7 +124,7 @@ void cursorMoveRight(struct TextEngine *te);
 float cursorGetOffsetWidth(struct TextEngine *te);
 void cursorResetBlinkState(struct TextEngine *te);
 
-struct Node* getNode(char c, struct Node* next, struct Node* prev);
+// struct Node* getNode(char c, struct Node* next, struct Node* prev);
 
 struct Line* getLine(struct TextEngine *te, struct Line *next, struct Line *prev);
 void lineCleanUp(struct Line *line);
@@ -125,13 +147,19 @@ void textEngineAppendChar(struct TextEngine *te, char c);
 void textEngineAppendLine(struct TextEngine *te);
 void textEngineAppendString(struct TextEngine *te, char *s);
 void textEnginePopCharUTF8(struct TextEngine *te);
+unsigned int textEnginePackUTF8(unsigned char *buffer, unsigned int *packed);
+unsigned int textEngineCountChars(unsigned char *buffer);
+void textEngineShiftGapStart(struct TextEngine *te);
+void textEngineShiftGapEnd(struct TextEngine *te);
 void textEnginePopLine(struct TextEngine *te);
+void textEngineRemoveLine(struct TextEngine *te, struct Line *line);
 void textEnginePollCursorBlinkTimer(struct TextEngine *te);
 void textEngineRenderCursor(struct TextEngine *te);
 void textEngineClearLine(struct TextEngine *te, struct Line *line);
 void textEngineRenderLine(struct TextEngine *te, struct Line *line);
 void textEngineRenderStatusBar(struct TextEngine *te);
 void textEngineRenderLines(struct TextEngine *te);
+void textEngineClear(struct TextEngine *te);
 void textEngineRecalculateLines(struct TextEngine *te);
 void textEngineUpdateFrameState(struct TextEngine *te);
 void textEngineCleanUp(struct TextEngine *te);

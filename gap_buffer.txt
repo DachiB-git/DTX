@@ -1,0 +1,100 @@
+per line gap buffer
+[LEFT GAP RIGHT]
+
+GAP_SIZE = 3
+
+[_ _ _ _ _ _ _ _ _ _]
+
+int|
+[i n t _ _ _ _ _ _ _]
+
+in|t
+[i n _ _ _ _ _ _ _ t]
+
+ini|t
+[i n i _ _ _ _ _ _ t]
+
+init
+[i n i t _ _ _ _ _ _]
+
+realloc to expand - O(n)
+move at cursor - O(1) | basically just a swap between cursor idx
+and gap_end
+
+struct Line
+{
+    char *gapBuffer;
+    unsigned int gapStart;
+    unsigned int gapEnd;
+}
+
+insert(c) -> gapStart++;
+delete() -> gapStart--;
+moveCursorLeft() -> gapBuffer[gapEnd--] = gapBuffer[gapStart++];
+
+[0 1 2 3 4 5]
+
+[i n i _ _ t]
+
+buffer[gapStart] = buffer[++gapEnd];
+
+len = 5
+
+#include <stdio.h>
+
+void toString(char *buffer, unsigned int len, unsigned int *s,
+unsigned int *e)
+{
+    *e += 1;
+    while (*e < len)
+    {
+        printf("%d\n", *e);
+        buffer[(*s)++] = buffer[(*e)++];
+    }
+    buffer[*s] = 0;
+}
+
+void cursorMoveLeft(char *buffer, unsigned int *s, unsigned int *e)
+{
+    buffer[(*e)--] = buffer[--(*s)];
+    buffer[*s] = 0;
+}
+
+void insert(char c, char *buffer, unsigned int *s)
+{
+    buffer[(*s)++] = c;
+}
+
+void delete(char *buffer, unsigned int *s)
+{
+    buffer[(*s)--] = 0;
+}
+
+int main(void)
+{
+    char gapBuffer[32] = {0};
+    unsigned int gapStart = 0;
+    unsigned int gapEnd = 31;
+    insert('i', gapBuffer, &gapStart);
+    insert('n', gapBuffer, &gapStart);
+    insert('t', gapBuffer, &gapStart);
+    cursorMoveLeft(gapBuffer, &gapStart, &gapEnd);
+    cursorMoveLeft(gapBuffer, &gapStart, &gapEnd);
+    cursorMoveLeft(gapBuffer, &gapStart, &gapEnd);
+    insert('f', gapBuffer, &gapStart);
+    //toString(gapBuffer, sizeof(gapBuffer), &gapStart, &gapEnd);
+    for (unsigned int i = 0; i < 32; i++)
+    {
+        if (gapBuffer[i])
+        {
+            printf("%c ", gapBuffer[i]);
+        }
+        else
+        {
+            printf("_ ");
+        }
+    }
+    printf("\n");
+    printf("%s\n", gapBuffer);
+    return 0;
+}
