@@ -95,8 +95,7 @@ void cursorMoveUp(struct TextEngine *te)
         {
             te->frameLast = te->frameLast->prev;
         }
-        SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
-        SDL_RenderClear(te->renderer);
+        textEngineClear(te);
         textEngineRecalculateLines(te);
         textEngineUpdateFrameState(te);
     }
@@ -125,8 +124,7 @@ void cursorMoveDown(struct TextEngine *te)
     {
         te->frameFirst = te->frameFirst->next;
         te->frameLast = te->frameLast->next;
-        SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
-        SDL_RenderClear(te->renderer);
+        textEngineClear(te);
         textEngineRecalculateLines(te);
     }
     cursorResetBlinkState(te);
@@ -342,8 +340,7 @@ struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHei
     SDL_GetRendererOutputSize(te->renderer, &te->renderWidth, &te->renderHeight);
     te->renderScale = (float) te->renderWidth / (float) te->windowWidth;
     SDL_RenderSetScale(te->renderer, te->renderScale, te->renderScale);
-    SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
-    SDL_RenderClear(te->renderer);
+    textEngineClear(te);
     te->fontFilePath = textEngineGetResourcePath(fontFileName);
     te->font = TTF_OpenFont(te->fontFilePath, (int) (fontSize * te->renderScale));
     if (te->font == NULL)
@@ -476,8 +473,7 @@ void textEngineHandleEvents(struct TextEngine *te)
                                 SDL_FreeSurface(charSurface);
                             }
                             SDL_FlushEvent(SDL_TEXTINPUT);
-                            SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
-                            SDL_RenderClear(te->renderer);
+                            textEngineClear(te);
                             textEngineUpdateFrameState(te);
                             textEngineRecalculateLines(te);
                         }
@@ -510,8 +506,7 @@ void textEngineHandleEvents(struct TextEngine *te)
                                 SDL_FreeSurface(charSurface);
                             }
                             SDL_FlushEvent(SDL_TEXTINPUT);
-                            SDL_SetRenderDrawColor(te->renderer, te->bgColor.r, te->bgColor.g, te->bgColor.b, te->bgColor.a);
-                            SDL_RenderClear(te->renderer);
+                            textEngineClear(te);
                             textEngineUpdateFrameState(te);
                             textEngineRecalculateLines(te);
                         }
