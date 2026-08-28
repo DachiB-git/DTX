@@ -1,42 +1,41 @@
 #include "text_engine.h"
 
 unsigned int allocated_bytes_lines = 0;
-unsigned int allocated_bytes_sbs = 0;
 
 void cursorSeekPrevCodePoint(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine->sb->gapStart == 0) return;
+    if (te->currentLine->gapStart == 0) return;
     te->cursor.columnNumber--;
     // transfer cont bytes
-    while (te->currentLine->sb->gapStart > 0 && isUTF8ContByte(te->currentLine->sb->gapBuffer[--te->currentLine->sb->gapStart]))
+    while (te->currentLine->gapStart > 0 && isUTF8ContByte(te->currentLine->gapBuffer[--te->currentLine->gapStart]))
     {
         if (!te->cursor.transferIsActive) continue;
-        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapEnd--] = te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart];
+        te->currentLine->gapBuffer[te->currentLine->gapEnd--] = te->currentLine->gapBuffer[te->currentLine->gapStart];
     }
     // transfer head byte
     if (te->cursor.transferIsActive)
     {
-        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapEnd--] = te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart];
+        te->currentLine->gapBuffer[te->currentLine->gapEnd--] = te->currentLine->gapBuffer[te->currentLine->gapStart];
     }
     else
     {
-        te->currentLine->sb->count--;
+        te->currentLine->count--;
     }
-    te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = '\0';
+    te->currentLine->gapBuffer[te->currentLine->gapStart] = '\0';
     return;
 }
 
 void cursorSeekNextCodePoint(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine->sb->gapEnd == te->currentLine->sb->capacity - 1) return;
+    if (te->currentLine->gapEnd == te->currentLine->capacity - 1) return;
     te->cursor.columnNumber++;
     // we are either on a single byte or multi byte lead character
     // move it over to the left side
-    te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart++] = te->currentLine->sb->gapBuffer[++te->currentLine->sb->gapEnd];
+    te->currentLine->gapBuffer[te->currentLine->gapStart++] = te->currentLine->gapBuffer[++te->currentLine->gapEnd];
     // analyze the moved byte to determine the rest of the operations
-    char c = te->currentLine->sb->gapBuffer[te->currentLine->sb->gapEnd];
+    char c = te->currentLine->gapBuffer[te->currentLine->gapEnd];
     int shifts = 0;
     // ascii
     if ((c & 0x80) == 0) return;
@@ -57,9 +56,9 @@ void cursorSeekNextCodePoint(struct TextEngine *te)
     }
     for (int i = 0; i < shifts; i++)
     {
-        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart++] = te->currentLine->sb->gapBuffer[++te->currentLine->sb->gapEnd];
+        te->currentLine->gapBuffer[te->currentLine->gapStart++] = te->currentLine->gapBuffer[++te->currentLine->gapEnd];
     }
-    te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = '\0';
+    te->currentLine->gapBuffer[te->currentLine->gapStart] = '\0';
     return;
 }
 
@@ -86,7 +85,7 @@ void cursorMoveUp(struct TextEngine *te)
     {
         te->currentLine = te->currentLine->prev;
         textEngineShiftGapEnd(te);
-        te->cursor.columnNumber = te->currentLine->sb->count;
+        te->cursor.columnNumber = te->currentLine->count;
         te->currentLine->shouldRerender = 1;
     }
     if (te->currentLine->offsetY <= SDL_roundf((float) (te->windowHeight - te->lineHeight) * (1.0 - te->autoScrollRatio)) && te->frameFirst != te->first)
@@ -108,7 +107,7 @@ void cursorMoveUp(struct TextEngine *te)
 void cursorMoveDown(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine == te->last && te->cursor.columnNumber == te->currentLine->sb->count) return;
+    if (te->currentLine == te->last && te->cursor.columnNumber == te->currentLine->count) return;
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
     if (te->currentLine == te->last)
@@ -119,7 +118,7 @@ void cursorMoveDown(struct TextEngine *te)
     {
         te->currentLine = te->currentLine->next;
         textEngineShiftGapEnd(te);
-        te->cursor.columnNumber = te->currentLine->sb->count;
+        te->cursor.columnNumber = te->currentLine->count;
         te->currentLine->shouldRerender = 1;
     }
     if (te->cursor.scrollIsActive && te->currentLine->offsetY >= SDL_roundf((float) (te->windowHeight - te->lineHeight) * te->autoScrollRatio) && te->frameLast != te->last)
@@ -140,7 +139,7 @@ void cursorMoveLeft(struct TextEngine *te)
     if (te->currentLine == te->first && te->cursor.columnNumber == 0) return;
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
-    if (te->currentLine->sb->size == 0 || te->cursor.columnNumber == 0)
+    if (te->currentLine->size == 0 || te->cursor.columnNumber == 0)
     {
         cursorMoveUp(te);
     }
@@ -155,10 +154,10 @@ void cursorMoveLeft(struct TextEngine *te)
 void cursorMoveRight(struct TextEngine *te)
 {
     if (te == NULL) return;
-    if (te->currentLine == te->last && te->cursor.columnNumber == te->currentLine->sb->count) return;
+    if (te->currentLine == te->last && te->cursor.columnNumber == te->currentLine->count) return;
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
-    if (te->currentLine->sb->size == 0 || te->cursor.columnNumber == te->currentLine->sb->count)
+    if (te->currentLine->size == 0 || te->cursor.columnNumber == te->currentLine->count)
     {
         cursorMoveDown(te);
         textEngineShiftGapStart(te);
@@ -176,161 +175,78 @@ float cursorGetOffsetWidth(struct TextEngine *te)
     return ((float) te->charAdvance / te->renderScale) * te->cursor.columnNumber;
 }
 
-void stringBuilderCleanUp(struct StringBuilder *sb)
-{
-    if (sb == NULL) return;
-    struct Node *n;
-    while (sb->head)
-    {
-        n = sb->head;
-        sb->head = sb->head->next;
-        free(n);
-    }
-    free(sb);
-    return;
-}
-
 void lineCleanUp(struct Line *line)
 {
     struct Line* curr;
     while (line)
     {
         curr = line;
-        stringBuilderCleanUp(curr->sb);
         line = line->next;
+        free(curr->gapBuffer);
         free(curr);
     }
     return;
 }
 
-struct StringBuilder* stringBuilderInit()
-{
-    struct StringBuilder* sb = malloc(sizeof(*sb));
-    if (sb == NULL) return sb;
-    allocated_bytes_sbs += sizeof(*sb);
-    memset(sb, 0, sizeof(*sb));
-    // size + 1 for null terminator
-    sb->gapBuffer = calloc(GAP_BUFFER_SIZE + 1, sizeof(char));
-    allocated_bytes_sbs += sizeof(char) * GAP_BUFFER_SIZE;
-    sb->capacity = GAP_BUFFER_SIZE;
-    sb->gapEnd = sb->capacity - 1;
-    return sb;
-}
-
-struct Node* getNode(char c, struct Node *next, struct Node *prev)
-{
-    struct Node* newNode = malloc(sizeof(*newNode));
-    allocated_bytes_sbs += sizeof(*newNode);
-    if (newNode == NULL) return newNode;
-    newNode->c = c;
-    newNode->next = next;
-    newNode->prev = prev;
-    return newNode;
-}
-
-// void stringBuilderPop(struct StringBuilder *sb)
-// {
-//     if (sb == NULL) return;
-//     if (sb->size == 0) return;
-//     sb->size--;
-//     if (sb->head == sb->tail)
-//     {
-//         free(sb->head);
-//         sb->head = NULL;
-//         sb->tail = NULL;
-//         return;
-//     }
-//     struct Node* oldTail = sb->tail;
-//     sb->tail = sb->tail->prev;
-//     sb->tail->next = NULL;
-//     free(oldTail);
-//     return;
-// }
-
-void stringBuilderPopUTF8(struct TextEngine *te, struct StringBuilder *sb)
-{
-    if (sb == NULL) return;
-    if (sb->size == 0) return;
-    // while (sb->size > 0 && isUTF8ContByte(sb->tail->c)) stringBuilderPop(sb);
-    // if (sb->tail->c == ' ' && te->currentLine->indentationEnd == sb->tail)
-    // {
-    //     te->currentLine->indentationDepth--;
-    //     stringBuilderPop(sb);
-    //     te->currentLine->indentationEnd = sb->tail;
-    // }
-    // else
-    // {
-    //     stringBuilderPop(sb);
-    // }
-    return;
-}
-
-// returns 0 on successful append, 1 on error
-int stringBuilderAppend(struct StringBuilder *sb, char c)
-{
-    sb->size++;
-    sb->gapBuffer[sb->gapStart++] = c;
-    if (!isUTF8ContByte(c)) sb->count++;
-    if (sb->size == sb->capacity)
-    {
-        unsigned int oldCapacity = sb->capacity;
-        sb->capacity <<= 1;
-        sb->gapBuffer = realloc(sb->gapBuffer, sizeof(char) * (sb->capacity + 1));
-        memset(sb->gapBuffer + oldCapacity, 0, sizeof(char) * (oldCapacity + 1));
-        // now there a multiple invariants here to what should happen to the buffer
-        // a. the cursor is at the end      a b * _ _
-        // A: no need to transfer anything since the right side of the gap is empty
-        // b. cursor it at the beginning    * _ _ a b
-        // B: after realloc, we need to move the old right side of the gap to the end of the enlarged space
-        // c. cursor is in the middle       a * _ _ b
-        // C: same idea as in B, since cursor being in the middle can be interpreted as sub portion of the buffer with the cursor at the start
-        // so the only time we don't need to transfer is when the cursor is at the end of the line
-        if (sb->gapEnd != oldCapacity - 1)
-        {
-            size_t len = oldCapacity - 1 - sb->gapEnd;
-            unsigned char *src = sb->gapBuffer + sb->gapEnd + 1;
-            sb->gapEnd = sb->capacity - 1 - len;
-            unsigned char *dst = sb->gapBuffer + sb->gapEnd + 1;
-            SDL_memmove(dst, src, len);
-        }
-        else
-        {
-            sb->gapEnd = sb->capacity - 1;
-        }
-    }
-    sb->gapBuffer[sb->gapStart] = '\0';
-    return 0;
-}
-
-int stringBuilderAppendString(struct TextEngine *te, struct StringBuilder *sb, char *s)
+void lineWriteString(struct TextEngine *te, struct Line *line, char *s)
 {
     while(*s)
     {
-        if (sb->size >= IN_OUT_BUFFER_SIZE - 1) break;
-        if (stringBuilderAppend(sb, *s) != 0) return 1;
-        if (sb->gapBuffer[sb->gapStart - 1] == ' ' && te->currentLine->indentationEnd == te->currentLine->sb->gapStart - 1)
+        line->size++;
+        line->gapBuffer[line->gapStart++] = *s;
+        if (!isUTF8ContByte(*s)) line->count++;
+        if (line->size == line->capacity)
         {
-            te->currentLine->indentationDepth++;
-            te->currentLine->indentationEnd++;
+            unsigned int oldCapacity = line->capacity;
+            allocated_bytes_lines += line->capacity;
+            line->capacity <<= 1;
+            line->gapBuffer = realloc(line->gapBuffer, sizeof(char) * (line->capacity + 1));
+            memset(line->gapBuffer + oldCapacity, 0, sizeof(char) * (oldCapacity + 1));
+            // now there a multiple invariants here to what should happen to the buffer
+            // a. the cursor is at the end      a b * _ _
+            // A: no need to transfer anything since the right side of the gap is empty
+            // b. cursor it at the beginning    * _ _ a b
+            // B: after realloc, we need to move the old right side of the gap to the end of the enlarged space
+            // c. cursor is in the middle       a * _ _ b
+            // C: same idea as in B, since cursor being in the middle can be interpreted as sub portion of the buffer with the cursor at the start
+            // so the only time we don't need to transfer is when the cursor is at the end of the line
+            if (line->gapEnd != oldCapacity - 1)
+            {
+                size_t len = oldCapacity - 1 - line->gapEnd;
+                unsigned char *src = line->gapBuffer + line->gapEnd + 1;
+                line->gapEnd = line->capacity - 1 - len;
+                unsigned char *dst = line->gapBuffer + line->gapEnd + 1;
+                SDL_memmove(dst, src, len);
+            }
+            else
+            {
+                line->gapEnd = line->capacity - 1;
+            }
+        }
+        line->gapBuffer[line->gapStart] = '\0';
+        if (line->gapBuffer[line->gapStart - 1] == ' ' && line->indentationEnd == line->gapStart - 1)
+        {
+            line->indentationDepth++;
+            line->indentationEnd++;
         }
         te->cursor.columnNumber++;
         s++;
     }
-    return 0;
+    return;
 }
 
 // Moves all the characters in the current line's gap buffer from the left to the right side.
 void textEngineShiftGapStart(struct TextEngine *te)
 {
-    if (te->currentLine->sb->gapStart != 0)
+    if (te->currentLine->gapStart != 0)
     {
-        char *dst = te->currentLine->sb->gapBuffer + te->currentLine->sb->gapEnd - (te->currentLine->sb->gapStart - 1);
-        char *src = te->currentLine->sb->gapBuffer;
-        size_t len = te->currentLine->sb->gapStart;
-        te->currentLine->sb->gapStart = 0;
-        te->currentLine->sb->gapEnd -= len;
+        char *dst = te->currentLine->gapBuffer + te->currentLine->gapEnd - (te->currentLine->gapStart - 1);
+        char *src = te->currentLine->gapBuffer;
+        size_t len = te->currentLine->gapStart;
+        te->currentLine->gapStart = 0;
+        te->currentLine->gapEnd -= len;
         SDL_memmove(dst, src, len);
-        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = 0;
+        te->currentLine->gapBuffer[te->currentLine->gapStart] = 0;
     }
     te->cursor.columnNumber = 0;
     return;
@@ -339,46 +255,19 @@ void textEngineShiftGapStart(struct TextEngine *te)
 // Moves all the characters in the current line's gap buffer from the right to the left side.
 void  textEngineShiftGapEnd(struct TextEngine *te)
 {
-    if (te->currentLine->sb->gapEnd != te->currentLine->sb->capacity - 1)
+    if (te->currentLine->gapEnd != te->currentLine->capacity - 1)
     {
-        char *dst = te->currentLine->sb->gapBuffer + te->currentLine->sb->gapStart;
-        char *src = te->currentLine->sb->gapBuffer + te->currentLine->sb->gapEnd + 1;
-        size_t len = (te->currentLine->sb->capacity - 1) - te->currentLine->sb->gapEnd;
-        te->currentLine->sb->gapEnd = te->currentLine->sb->capacity - 1;
-        te->currentLine->sb->gapStart += len;
+        char *dst = te->currentLine->gapBuffer + te->currentLine->gapStart;
+        char *src = te->currentLine->gapBuffer + te->currentLine->gapEnd + 1;
+        size_t len = (te->currentLine->capacity - 1) - te->currentLine->gapEnd;
+        te->currentLine->gapEnd = te->currentLine->capacity - 1;
+        te->currentLine->gapStart += len;
         SDL_memmove(dst, src, len);
-        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = '\0';
+        te->currentLine->gapBuffer[te->currentLine->gapStart] = '\0';
     }
-    te->cursor.columnNumber = te->currentLine->sb->count;
+    te->cursor.columnNumber = te->currentLine->count;
     return;
 }
-
-// void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int size)
-// {
-//     if (sb == NULL) return;
-//     struct Node* n = sb->head;
-//     unsigned int count = 0;
-//     while (n)
-//     {
-//         if (count >= size - 1) break;
-//         buffer[count++] = n->c;
-//         n = n->next;
-//     }
-//     buffer[count] = '\0';
-//     return;
-// }
-
-// unsigned int stringBuilderCalculateSize(struct StringBuilder *sb)
-// {
-//     struct Node *head = sb->head;
-//     unsigned int size = 0;
-//     while (head)
-//     {
-//         size++;
-//         head = head->next;
-//     }
-//     return size;
-// }
 
 struct Line* getLine(struct TextEngine *te, struct Line *next, struct Line *prev)
 {
@@ -386,7 +275,11 @@ struct Line* getLine(struct TextEngine *te, struct Line *next, struct Line *prev
     allocated_bytes_lines += sizeof(*line);
     if (line == NULL) return line;
     memset(line, 0, sizeof(*line));
-    line->sb = stringBuilderInit();
+    // size + 1 for null terminator
+    line->gapBuffer = calloc(GAP_BUFFER_SIZE + 1, sizeof(char));
+    allocated_bytes_lines += sizeof(char) * GAP_BUFFER_SIZE;
+    line->capacity = GAP_BUFFER_SIZE;
+    line->gapEnd = line->capacity - 1;
     line->next = next;
     line->prev = prev;
     line->offsetY = te->lineHeight;
@@ -436,8 +329,8 @@ struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHei
         SDL_FreeSurface(iconSurface);
         free(iconPath);
     }
-    // te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_ACCELERATED);
-    te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_SOFTWARE);
+    te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_ACCELERATED);
+    // te->renderer = SDL_CreateRenderer(te->window, -1, SDL_RENDERER_SOFTWARE);
     if (te->renderer == NULL)
     {
         fprintf(stderr, "Failed to create a renderer: %s\n", SDL_GetError());
@@ -646,7 +539,7 @@ void textEngineUpdateFrameState(struct TextEngine *te)
     if (te->cursor.scrollIsActive && te->currentLine->lineNumber > te->frameLast->lineNumber)
     {
         te->currentLine = te->frameLast;
-        te->cursor.columnNumber = te->currentLine->sb->count;
+        te->cursor.columnNumber = te->currentLine->count;
     }
     return;
 } 
@@ -699,17 +592,17 @@ void textEngineAppendLine(struct TextEngine *te)
     // restore cursor pos
     te->cursor.columnNumber = cachedCursorPos;
     // cursor is not at the end
-    if (te->cursor.columnNumber != te->currentLine->sb->count)
+    if (te->cursor.columnNumber != te->currentLine->count)
     {
         te->currentLine = line;
-        te->cursor.columnNumber = te->currentLine->sb->count;
-        textEngineAppendString(te, cachedCurrentLine->sb->gapBuffer + cachedCurrentLine->sb->gapEnd + 1);
+        te->cursor.columnNumber = te->currentLine->count;
+        textEngineAppendString(te, cachedCurrentLine->gapBuffer + cachedCurrentLine->gapEnd + 1);
         te->currentLine = cachedCurrentLine;
         te->cursor.columnNumber = cachedCursorPos;
-        te->currentLine->sb->count -= textEngineCountChars(te->currentLine->sb->gapBuffer + te->currentLine->sb->gapEnd + 1);
-        te->currentLine->sb->size -= te->currentLine->sb->capacity - 1 - te->currentLine->sb->gapEnd;
-        te->currentLine->sb->gapBuffer[te->currentLine->sb->gapStart] = '\0';
-        te->currentLine->sb->gapEnd = te->currentLine->sb->capacity - 1;
+        te->currentLine->count -= textEngineCountChars(te->currentLine->gapBuffer + te->currentLine->gapEnd + 1);
+        te->currentLine->size -= te->currentLine->capacity - 1 - te->currentLine->gapEnd;
+        te->currentLine->gapBuffer[te->currentLine->gapStart] = '\0';
+        te->currentLine->gapEnd = te->currentLine->capacity - 1;
         cursorMoveDown(te);
         textEngineShiftGapStart(te);
     }
@@ -832,7 +725,7 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
         SDL_RenderFillRectF(te->renderer, &highlightRect);
     }
     // render text if size > 0
-    if (line->sb->size != 0)
+    if (line->size != 0)
     {
         struct Glyph charGlyph;
         unsigned int packed = 0;
@@ -843,19 +736,19 @@ void textEngineRenderLine(struct TextEngine *te, struct Line *line)
         // 1 = buffer + 0
         // 2 = buffer + 1
         // 3 = buffer + 2
-        while (i < line->sb->gapStart)
+        while (i < line->gapStart)
         {
-            i += textEnginePackUTF8(line->sb->gapBuffer + i, &packed);
+            i += textEnginePackUTF8(line->gapBuffer + i, &packed);
             charGlyph = te->glyphs[packed];
             rect.w = (float) charGlyph.width / te->renderScale;
             rect.h = (float) charGlyph.height / te->renderScale;
             SDL_RenderCopyF(te->renderer, charGlyph.texture, NULL, &rect);
             rect.x += (float) (te->charAdvance) / te->renderScale;
         }
-        i = line->sb->gapEnd + 1;
-        while (i < line->sb->capacity)
+        i = line->gapEnd + 1;
+        while (i < line->capacity)
         {
-            i += textEnginePackUTF8(line->sb->gapBuffer + i, &packed);
+            i += textEnginePackUTF8(line->gapBuffer + i, &packed);
             charGlyph = te->glyphs[packed];
             rect.w = (float) charGlyph.width / te->renderScale;
             rect.h = (float) charGlyph.height / te->renderScale;
@@ -919,7 +812,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
     if (te == NULL) return;
     if (te->currentLine == te->first && te->cursor.columnNumber == 0) return;
     // empty line, pop it
-    if (te->currentLine->sb->size == 0)
+    if (te->currentLine->size == 0)
     {
         cursorMoveUp(te);
         textEngineRemoveLine(te, te->currentLine->next);
@@ -929,9 +822,9 @@ void textEnginePopCharUTF8(struct TextEngine *te)
     {
         textEngineShiftGapEnd(te);
         cursorMoveUp(te);
-        unsigned int oldCursorPosition = te->currentLine->sb->count;
-        textEngineAppendString(te, te->currentLine->next->sb->gapBuffer);
-        for (unsigned int i = te->currentLine->sb->count; i > oldCursorPosition; i--)
+        unsigned int oldCursorPosition = te->currentLine->count;
+        textEngineAppendString(te, te->currentLine->next->gapBuffer);
+        for (unsigned int i = te->currentLine->count; i > oldCursorPosition; i--)
         {
             cursorMoveLeft(te);
         }
@@ -943,7 +836,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
         te->cursor.transferIsActive = 0;
         cursorMoveLeft(te);
         te->cursor.transferIsActive = 1;
-        if (te->currentLine->indentationEnd == te->currentLine->sb->gapStart + 1)
+        if (te->currentLine->indentationEnd == te->currentLine->gapStart + 1)
         {
             te->currentLine->indentationDepth--;
             te->currentLine->indentationEnd--;
@@ -955,16 +848,6 @@ void textEnginePopCharUTF8(struct TextEngine *te)
     te->fileIsNotSaved = 1;
     return;
 }
-
-// void textEngineAppendChar(struct TextEngine *te, char c)
-// {
-//     if(te == NULL) return;
-//     stringBuilderAppend(te->currentLine->sb, c);
-//     te->currentLine->shouldRerender = 1;
-//     te->shouldRerenderLines = 1;
-//     te->cursor.currentNode = te->currentLine->sb->tail;
-//     return;
-// }
 
 void textEngineReadFile(struct TextEngine *te)
 {
@@ -1043,12 +926,12 @@ void textEngineWriteFile(struct TextEngine *te)
     struct Line *line = te->first;
     while (line)
     {
-        if (fputs(line->sb->gapBuffer, outputFile) == EOF)
+        if (fputs(line->gapBuffer, outputFile) == EOF)
         {
             fprintf(stderr, "Error while writing to the file.");
             break;
         }
-        if (fputs(line->sb->gapBuffer + line->sb->gapEnd + 1, outputFile) == EOF)
+        if (fputs(line->gapBuffer + line->gapEnd + 1, outputFile) == EOF)
         {
             fprintf(stderr, "Error while writing to the file.");
             break;
@@ -1070,7 +953,7 @@ void textEngineAppendString(struct TextEngine *te, char *s)
 {
     if (te == NULL) return;
     te->fileIsNotSaved = 1;
-    stringBuilderAppendString(te, te->currentLine->sb, s);
+    lineWriteString(te, te->currentLine, s);
     te->currentLine->shouldRerender = 1;
     te->shouldRerenderLines = 1;
     cursorResetBlinkState(te);

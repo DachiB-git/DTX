@@ -1,8 +1,6 @@
 #include "text_engine.h"
 
 extern unsigned int allocated_bytes_lines;
-extern unsigned int allocated_bytes_sbs;
-
 
 char allocationFormatBuffer[11];
 
@@ -77,7 +75,6 @@ int main(int argc, char *argv[])
         }
     }
     printf("allocated_bytes(lines): %s\n", formatAllocation(allocated_bytes_lines));
-    printf("allocated_bytes(sbs): %s\n", formatAllocation(allocated_bytes_sbs));
     textEngineCleanUp(te);
     return 0;
 }

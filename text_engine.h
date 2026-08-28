@@ -41,25 +41,6 @@ struct Cursor
     unsigned int blinkIntervalMillis;
 };
 
-struct Node
-{
-    char c;
-    struct Node *prev;
-    struct Node *next;
-};
-
-struct StringBuilder
-{
-    char *gapBuffer;
-    unsigned int gapStart;
-    unsigned int gapEnd;
-    unsigned int size;
-    unsigned int count;
-    unsigned int capacity;
-    struct Node *head;
-    struct Node *tail;
-};
-
 struct Line
 {
     float offsetX;
@@ -68,7 +49,6 @@ struct Line
     unsigned int indentationDepth;
     unsigned int indentationEnd;
     unsigned int shouldRerender;
-    struct StringBuilder *sb;
     char *gapBuffer;
     unsigned int gapStart;
     unsigned int gapEnd;
@@ -124,26 +104,15 @@ void cursorMoveRight(struct TextEngine *te);
 float cursorGetOffsetWidth(struct TextEngine *te);
 void cursorResetBlinkState(struct TextEngine *te);
 
-// struct Node* getNode(char c, struct Node* next, struct Node* prev);
-
 struct Line* getLine(struct TextEngine *te, struct Line *next, struct Line *prev);
+void lineWriteString(struct TextEngine *te, struct Line *line, char *s);
 void lineCleanUp(struct Line *line);
-
-struct StringBuilder* stringBuilderInit();
-int stringBuilderAppend(struct StringBuilder *sb, char c);
-int stringBuilderAppendString(struct TextEngine *te, struct StringBuilder *sb, char *s);
-void stringBuilderPop(struct StringBuilder *sb);
-void stringBuilderPopUTF8(struct TextEngine *te, struct StringBuilder *sb);
-void stringBuilderToString(struct StringBuilder *sb, char *buffer, unsigned int size);
-unsigned int stringBuilderCalculateSize(struct StringBuilder *sb);
-void stringBuilderCleanUp(struct StringBuilder *sb);
 
 struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHeight, char *fontFileName, int fontSize, SDL_Color textColor, SDL_Color bgColor);
 void textEngineHandleEvents(struct TextEngine *te);
 char* textEngineGetResourcePath(char *fileName);
 void textEngineReadFile(struct TextEngine *te);
 void textEngineWriteFile(struct TextEngine *te);
-void textEngineAppendChar(struct TextEngine *te, char c);
 void textEngineAppendLine(struct TextEngine *te);
 void textEngineAppendString(struct TextEngine *te, char *s);
 void textEnginePopCharUTF8(struct TextEngine *te);
