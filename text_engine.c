@@ -314,7 +314,7 @@ struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHei
         textEngineCleanUp(te);
         return NULL;
     }
-    te->window = SDL_CreateWindow("DTX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, te->windowWidth, te->windowHeight, SDL_WINDOW_HIDDEN | SDL_WINDOW_ALLOW_HIGHDPI);
+    te->window = SDL_CreateWindow("DTX", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, te->windowWidth, te->windowHeight, SDL_WINDOW_HIDDEN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     if (te->window == NULL)
     {
         fprintf(stderr, "Failed to create a window: %s\n", SDL_GetError());
@@ -401,6 +401,18 @@ void textEngineHandleEvents(struct TextEngine *te)
         {
         case SDL_QUIT:
             te->isRunning = 0;
+            break;
+        case SDL_WINDOWEVENT:
+            if (event.window.event == SDL_WINDOWEVENT_RESIZED)
+            {
+                SDL_GetWindowSize(te->window, &te->windowWidth, &te->windowHeight);
+                SDL_GetRendererOutputSize(te->renderer, &te->renderWidth, &te->renderHeight);
+                te->renderScale = (float) te->renderWidth / (float) te->windowWidth;
+                SDL_RenderSetScale(te->renderer, te->renderScale, te->renderScale);
+                textEngineClear(te);
+                textEngineUpdateFrameState(te);
+                textEngineRecalculateLines(te);
+            }
             break;
         case SDL_TEXTINPUT:
             textEngineAppendString(te, event.text.text);
@@ -532,7 +544,11 @@ void textEngineUpdateFrameState(struct TextEngine *te)
     else
     {
         te->frameLast = te->frameFirst;
-        while (te->frameLast->lineNumber < maxVisibleLineNumber) te->frameLast = te->frameLast->next;
+        while (maxVisibleLineNumber > te->frameFirst->lineNumber)
+        { 
+            te->frameLast = te->frameLast->next;
+            maxVisibleLineNumber--;
+        }
     }
     // cursor out of bounds
     // reset to last visible line
@@ -632,6 +648,7 @@ void textEngineRemoveLine(struct TextEngine *te, struct Line *line)
     {
         line->next->prev = line->prev;
         textEngineClear(te);
+        textEngineUpdateFrameState(te);
         textEngineRecalculateLines(te);
     }
     else
