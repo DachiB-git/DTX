@@ -785,25 +785,6 @@ void textEngineRenderStatusBar(struct TextEngine *te)
         (float) te->renderWidth,
         te->lineHeight
     };
-    SDL_SetRenderDrawColor(te->renderer, 255, 255, 0, 255);
-    SDL_RenderFillRectF(te->renderer, &statusBarRect);
-    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, " Lines: %d Ln: %d Col: %d", te->lines, te->currentLine->lineNumber, te->cursor.columnNumber);
-    SDL_Surface *statusBarSurface = TTF_RenderUTF8_Blended(te->font, te->buffer, (SDL_Color) {0, 0, 0, 255});
-    SDL_Texture *statusBarTexture = SDL_CreateTextureFromSurface(te->renderer, statusBarSurface);
-    SDL_FRect statusBarTextRect =
-    {
-        0,
-        statusBarOffsetY + te->halfLeading,
-        (float) statusBarSurface->w / te->renderScale,
-        (float) statusBarSurface->h / te->renderScale
-    };
-    SDL_FRect statusBarFileStatusRect =
-    {
-        statusBarTextRect.w,
-        statusBarOffsetY,
-        (float) te->renderWidth,
-        te->lineHeight
-    };
     if (te->fileIsNotSaved)
     {
         SDL_SetRenderDrawColor(te->renderer, 255, 0, 0, 255);
@@ -812,10 +793,34 @@ void textEngineRenderStatusBar(struct TextEngine *te)
     {
         SDL_SetRenderDrawColor(te->renderer, 255, 255, 0, 255);
     }
-    SDL_RenderFillRectF(te->renderer, &statusBarFileStatusRect);
-    SDL_RenderCopyF(te->renderer, statusBarTexture, NULL, &statusBarTextRect);
-    SDL_DestroyTexture(statusBarTexture);
-    SDL_FreeSurface(statusBarSurface);
+    SDL_RenderFillRectF(te->renderer, &statusBarRect);
+    snprintf(te->buffer, IN_OUT_BUFFER_SIZE, " Lines: %d Ln: %d Col: %d", te->lines, te->currentLine->lineNumber, te->cursor.columnNumber);
+    char *statusText = te->buffer;
+    SDL_FRect statusBarTextRect =
+    {
+        0,
+        statusBarOffsetY + te->halfLeading,
+        0,
+        0
+    };
+    while (*statusText)
+    {
+        struct Glyph charGlyph = te->glyphs[*statusText]; 
+        statusBarTextRect.w = (float) charGlyph.width / te->renderScale;
+        statusBarTextRect.h = (float) charGlyph.height / te->renderScale;
+        if (!te->fileIsNotSaved)
+        {
+            SDL_SetTextureColorMod(charGlyph.texture, 0, 0, 0);
+            SDL_RenderCopyF(te->renderer, charGlyph.texture, NULL, &statusBarTextRect);
+            SDL_SetTextureColorMod(charGlyph.texture, 255, 255, 255);
+        }
+        else
+        {
+            SDL_RenderCopyF(te->renderer, charGlyph.texture, NULL, &statusBarTextRect);
+        }
+        statusText++;
+        statusBarTextRect.x += (float) te->charAdvance / te->renderScale;
+    }
     return;
 }
 
