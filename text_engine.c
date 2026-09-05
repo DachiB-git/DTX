@@ -627,7 +627,6 @@ void textEngineAppendLine(struct TextEngine *te)
     }
     else
     {
-        printf("%d %d %d\n", te->currentLine->size, te->currentLine->gapStart, te->currentLine->gapEnd);
         cursorMoveDown(te);
     }
     if (te->currentLine->indentationDepth != te->currentLine->prev->indentationDepth)
