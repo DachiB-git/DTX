@@ -564,7 +564,7 @@ void textEngineHandleEvents(struct TextEngine *te)
                         }
                     }
                     break;
-                case SDLK_LEFTBRACKET:
+                    case SDLK_LEFTBRACKET:
                     if (event.key.keysym.mod & KMOD_CTRL && te->currentLine->indentationDepth > 0)
                     {
                         unsigned int oldCursorLocation = te->cursor.columnNumber;
@@ -597,7 +597,7 @@ void textEngineHandleEvents(struct TextEngine *te)
                                 textEnginePopCharUTF8(te);
                             }
                         }
-                        while (te->cursor.columnNumber != oldCursorLocation)
+                        while (te->cursor.columnNumber != oldCursorLocation && te->cursor.columnNumber < te->currentLine->count)
                         {
                             if (oldCursorLocation > te->cursor.columnNumber)
                             {
@@ -608,10 +608,13 @@ void textEngineHandleEvents(struct TextEngine *te)
                                 cursorMoveLeft(te);
                             }
                         }
-                        unsigned int shiftAmount = oldIndentationDepth - te->currentLine->indentationDepth;
-                        for (int i = 0; i < shiftAmount; i++)
+                        if (te->cursor.columnNumber != te->currentLine->count)
                         {
-                            cursorMoveLeft(te);
+                            unsigned int shiftAmount = oldIndentationDepth - te->currentLine->indentationDepth;
+                            for (int i = 0; i < shiftAmount; i++)
+                            {
+                                cursorMoveLeft(te);
+                            }
                         }
                     }
                     break;
