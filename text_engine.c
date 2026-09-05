@@ -383,6 +383,7 @@ struct TextEngine* textEngineInit(char *fileName, int windowWidth, int windowHei
     te->cursor.width = 2.0;
     te->isRunning = 1;
     te->fileIsNotSaved = 0;
+    te->tabsToSpacesCount = 4;
     SDL_ShowWindow(te->window);
     return te;
 }
@@ -436,10 +437,10 @@ void textEngineHandleEvents(struct TextEngine *te)
                     textEngineAppendLine(te);
                     break;
                 case SDLK_TAB:
-                    textEngineAppendString(te, " ");
-                    textEngineAppendString(te, " ");
-                    textEngineAppendString(te, " ");
-                    textEngineAppendString(te, " ");
+                    for (int i = 0; i < te->tabsToSpacesCount; i++)
+                    {
+                        textEngineAppendString(te, " ");
+                    }
                     cursorResetBlinkState(te);
                     break;
                 case SDLK_DOWN:
@@ -526,6 +527,94 @@ void textEngineHandleEvents(struct TextEngine *te)
                         te->fileIsNotSaved = 0;
                         textEngineWriteFile(te);
                     }
+                    break;
+                case SDLK_RIGHTBRACKET:
+                    if (event.key.keysym.mod & KMOD_CTRL)
+                    {
+                        unsigned int oldCursorLocation = te->cursor.columnNumber;
+                        while(te->currentLine->gapStart != te->currentLine->indentationEnd)
+                        {
+                            if (te->currentLine->indentationEnd > te->currentLine->gapStart)
+                            {
+                                cursorMoveRight(te);
+                            }
+                            else
+                            {
+                                cursorMoveLeft(te);
+                            }
+                        }
+                        for (int i = 0; i < te->tabsToSpacesCount; i++)
+                        {
+                            textEngineAppendString(te, " ");
+                        }
+                        while (te->cursor.columnNumber != oldCursorLocation)
+                        {
+                            if (oldCursorLocation > te->cursor.columnNumber)
+                            {
+                                cursorMoveRight(te);
+                            }
+                            else
+                            {
+                                cursorMoveLeft(te);
+                            }
+                        }
+                        for (int i = 0; i < te->tabsToSpacesCount; i++)
+                        {
+                            cursorMoveRight(te);
+                        }
+                    }
+                    break;
+                case SDLK_LEFTBRACKET:
+                    if (event.key.keysym.mod & KMOD_CTRL && te->currentLine->indentationDepth > 0)
+                    {
+                        unsigned int oldCursorLocation = te->cursor.columnNumber;
+                        unsigned int oldIndentationDepth = te->currentLine->indentationDepth;
+                        while(te->currentLine->gapStart != te->currentLine->indentationEnd)
+                        {
+                            if (te->currentLine->indentationEnd > te->currentLine->gapStart)
+                            {
+                                cursorMoveRight(te);
+                            }
+                            else
+                            {
+                                cursorMoveLeft(te);
+                            }
+                        }
+                        // the tabsToSpaces value is always 4 for now, since the user is unable to edit it at this time
+                        // use fast bitwise calc to get the next minimal multiple of indentationDepth respective to 4
+                        unsigned int remainder = te->currentLine->indentationDepth & 3;
+                        if (remainder == 0)
+                        {
+                            for (int i = 0; i < te->tabsToSpacesCount; i++)
+                            {
+                                textEnginePopCharUTF8(te);
+                            }
+                        }
+                        else
+                        {
+                            for (int i = 0; i < remainder; i++)
+                            {
+                                textEnginePopCharUTF8(te);
+                            }
+                        }
+                        while (te->cursor.columnNumber != oldCursorLocation)
+                        {
+                            if (oldCursorLocation > te->cursor.columnNumber)
+                            {
+                                cursorMoveRight(te);
+                            }
+                            else
+                            {
+                                cursorMoveLeft(te);
+                            }
+                        }
+                        unsigned int shiftAmount = oldIndentationDepth - te->currentLine->indentationDepth;
+                        for (int i = 0; i < shiftAmount; i++)
+                        {
+                            cursorMoveLeft(te);
+                        }
+                    }
+                    break;
                 default:
                     break;
             }

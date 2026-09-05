@@ -88,6 +88,7 @@ struct TextEngine
     unsigned int shouldRerenderCursor;
     unsigned int shouldRerenderStatusBar;
     float autoScrollRatio;
+    unsigned int tabsToSpacesCount;
     struct Line *currentLine;
     struct Line *first;
     struct Line *last;
