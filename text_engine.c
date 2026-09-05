@@ -230,7 +230,7 @@ void lineWriteString(struct TextEngine *te, struct Line *line, char *s)
             }
         }
         line->gapBuffer[line->gapStart] = '\0';
-        if (line->gapBuffer[line->gapStart - 1] == ' ' && line->indentationEnd == line->gapStart - 1)
+        if (line->gapBuffer[line->gapStart - 1] == ' ' && line->indentationEnd >= line->gapStart - 1)
         {
             line->indentationDepth++;
             line->indentationEnd++;
@@ -532,6 +532,7 @@ void textEngineHandleEvents(struct TextEngine *te)
                     if (event.key.keysym.mod & KMOD_CTRL)
                     {
                         unsigned int oldCursorLocation = te->cursor.columnNumber;
+                        unsigned int oldIndentationEnd = te->currentLine->indentationEnd;
                         while(te->currentLine->gapStart != te->currentLine->indentationEnd)
                         {
                             if (te->currentLine->indentationEnd > te->currentLine->gapStart)
@@ -543,7 +544,10 @@ void textEngineHandleEvents(struct TextEngine *te)
                                 cursorMoveLeft(te);
                             }
                         }
-                        for (int i = 0; i < te->tabsToSpacesCount; i++)
+                        // the tabsToSpaces value is always 4 for now, since the user is unable to edit it at this time
+                        // use fast bitwise calc to only indent to the nearest multiple of 4
+                        unsigned int remainder = te->tabsToSpacesCount - (te->currentLine->indentationDepth & 3);
+                        for (int i = 0; i < remainder; i++)
                         {
                             textEngineAppendString(te, " ");
                         }
@@ -558,9 +562,13 @@ void textEngineHandleEvents(struct TextEngine *te)
                                 cursorMoveLeft(te);
                             }
                         }
-                        for (int i = 0; i < te->tabsToSpacesCount; i++)
+                        // if indenting at the edge of oldIndentationEnd or after it, match the shift
+                        if (te->currentLine->gapStart >= oldIndentationEnd)
                         {
-                            cursorMoveRight(te);
+                            for (int i = 0; i < remainder; i++)
+                            {
+                                cursorMoveRight(te);
+                            }
                         }
                     }
                     break;
@@ -568,7 +576,8 @@ void textEngineHandleEvents(struct TextEngine *te)
                     if (event.key.keysym.mod & KMOD_CTRL && te->currentLine->indentationDepth > 0)
                     {
                         unsigned int oldCursorLocation = te->cursor.columnNumber;
-                        unsigned int oldIndentationDepth = te->currentLine->indentationDepth;
+                        unsigned int oldGapStart = te->currentLine->gapStart;
+                        unsigned int oldIndentationEnd = te->currentLine->indentationEnd;
                         while(te->currentLine->gapStart != te->currentLine->indentationEnd)
                         {
                             if (te->currentLine->indentationEnd > te->currentLine->gapStart)
@@ -585,33 +594,24 @@ void textEngineHandleEvents(struct TextEngine *te)
                         unsigned int remainder = te->currentLine->indentationDepth & 3;
                         if (remainder == 0)
                         {
-                            for (int i = 0; i < te->tabsToSpacesCount; i++)
-                            {
-                                textEnginePopCharUTF8(te);
-                            }
+                            remainder = te->tabsToSpacesCount;
                         }
-                        else
+                        for (int i = 0; i < remainder; i++)
                         {
-                            for (int i = 0; i < remainder; i++)
-                            {
-                                textEnginePopCharUTF8(te);
-                            }
+                            textEnginePopCharUTF8(te);
                         }
-                        while (te->cursor.columnNumber != oldCursorLocation && te->cursor.columnNumber < te->currentLine->count)
+                        if (oldGapStart > oldIndentationEnd)
                         {
-                            if (oldCursorLocation > te->cursor.columnNumber)
+                            unsigned int offset = oldGapStart - oldIndentationEnd;
+                            for (int i = 0; i < offset; i++)
                             {
                                 cursorMoveRight(te);
                             }
-                            else
-                            {
-                                cursorMoveLeft(te);
-                            }
                         }
-                        if (te->cursor.columnNumber != te->currentLine->count)
+                        else if (oldGapStart < te->currentLine->indentationEnd)
                         {
-                            unsigned int shiftAmount = oldIndentationDepth - te->currentLine->indentationDepth;
-                            for (int i = 0; i < shiftAmount; i++)
+                            unsigned int offset = te->currentLine->indentationEnd - oldGapStart;
+                            for (int i = 0; i < offset; i++)
                             {
                                 cursorMoveLeft(te);
                             }
@@ -953,7 +953,7 @@ void textEnginePopCharUTF8(struct TextEngine *te)
         te->cursor.transferIsActive = 0;
         cursorMoveLeft(te);
         te->cursor.transferIsActive = 1;
-        if (te->currentLine->indentationEnd == te->currentLine->gapStart + 1)
+        if (te->currentLine->indentationEnd >= te->currentLine->gapStart + 1)
         {
             te->currentLine->indentationDepth--;
             te->currentLine->indentationEnd--;
