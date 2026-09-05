@@ -74,6 +74,11 @@ int main(int argc, char *argv[])
             SDL_Delay(TARGET_MILLIS_PER_FRAME - frameTime);
         }
     }
+    // TODO: add a prompt that asks if the user wants to save the modified file or not on exit
+    // if (te->fileIsNotSaved)
+    // {
+    //     textEngineWriteFile(te);
+    // }
     printf("allocated_bytes(lines): %s\n", formatAllocation(allocated_bytes_lines));
     textEngineCleanUp(te);
     return 0;

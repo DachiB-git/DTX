@@ -10,7 +10,11 @@ void cursorSeekPrevCodePoint(struct TextEngine *te)
     // transfer cont bytes
     while (te->currentLine->gapStart > 0 && isUTF8ContByte(te->currentLine->gapBuffer[--te->currentLine->gapStart]))
     {
-        if (!te->cursor.transferIsActive) continue;
+        if (!te->cursor.transferIsActive)
+        {
+            te->currentLine->size--;
+            continue;
+        }
         te->currentLine->gapBuffer[te->currentLine->gapEnd--] = te->currentLine->gapBuffer[te->currentLine->gapStart];
     }
     // transfer head byte
@@ -21,6 +25,7 @@ void cursorSeekPrevCodePoint(struct TextEngine *te)
     else
     {
         te->currentLine->count--;
+        te->currentLine->size--;
     }
     te->currentLine->gapBuffer[te->currentLine->gapStart] = '\0';
     return;
@@ -38,7 +43,10 @@ void cursorSeekNextCodePoint(struct TextEngine *te)
     char c = te->currentLine->gapBuffer[te->currentLine->gapEnd];
     int shifts = 0;
     // ascii
-    if ((c & 0x80) == 0) return;
+    if ((c & 0x80) == 0)
+    {
+        shifts = 0;
+    }
     // two byte
     else if ((c & 0xE0) == 0xC0)
     {
@@ -111,7 +119,7 @@ void cursorMoveDown(struct TextEngine *te)
     te->shouldRerenderLines = 1;
     if (te->currentLine == te->last)
     {
-        textEngineShiftGapStart(te);
+        textEngineShiftGapEnd(te);
     }
     else
     {
@@ -619,6 +627,7 @@ void textEngineAppendLine(struct TextEngine *te)
     }
     else
     {
+        printf("%d %d %d\n", te->currentLine->size, te->currentLine->gapStart, te->currentLine->gapEnd);
         cursorMoveDown(te);
     }
     if (te->currentLine->indentationDepth != te->currentLine->prev->indentationDepth)
@@ -943,6 +952,7 @@ void textEngineWriteFile(struct TextEngine *te)
     struct Line *line = te->first;
     while (line)
     {
+        printf("%d %d %s\n", line->gapStart, line->gapEnd, line->gapBuffer);
         if (fputs(line->gapBuffer, outputFile) == EOF)
         {
             fprintf(stderr, "Error while writing to the file.");
