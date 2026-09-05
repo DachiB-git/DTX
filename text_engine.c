@@ -1171,9 +1171,9 @@ void textEngineRecalculateLines(struct TextEngine *te)
 void textEngineCleanUp(struct TextEngine *te)
 {
     if (te == NULL) return;
-    SDL_DestroyWindow(te->window);
-    SDL_DestroyRenderer(te->renderer);
     TTF_CloseFont(te->font);
+    SDL_DestroyRenderer(te->renderer);
+    SDL_DestroyWindow(te->window);
     lineCleanUp(te->first);
     free(te->fontFilePath);
     TTF_Quit();
