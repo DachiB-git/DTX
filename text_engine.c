@@ -952,7 +952,6 @@ void textEngineWriteFile(struct TextEngine *te)
     struct Line *line = te->first;
     while (line)
     {
-        printf("%d %d %s\n", line->gapStart, line->gapEnd, line->gapBuffer);
         if (fputs(line->gapBuffer, outputFile) == EOF)
         {
             fprintf(stderr, "Error while writing to the file.");
